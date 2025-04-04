@@ -8,7 +8,7 @@ from datetime import datetime
 bp = Blueprint('qa', __name__, url_prefix='/api/qa')
 
 # Initialize OpenAI client
-client = OpenAI()
+client = OpenAI()  # It will automatically use OPENAI_API_KEY from environment
 
 def count_tokens(text: str) -> int:
     """Count tokens in text using tiktoken"""

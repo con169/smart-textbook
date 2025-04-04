@@ -19,10 +19,11 @@ def create_app():
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     
     # Register blueprints
-    from app.routes import pdf_routes, qa_routes, tts_routes
+    from app.routes import pdf_routes, qa_routes  # Remove tts_routes for now
     app.register_blueprint(pdf_routes.bp)
     app.register_blueprint(qa_routes.bp)
-    app.register_blueprint(tts_routes.bp)
+    # Comment out tts_routes until we implement it
+    # app.register_blueprint(tts_routes.bp)
     
     return app
 
