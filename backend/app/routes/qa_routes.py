@@ -166,27 +166,34 @@ def get_table_of_contents():
             return jsonify({'error': 'No PDF file uploaded'}), 404
 
         reader = PdfReader(filename)
-        toc = []
         
-        # Try to get the table of contents from PDF metadata
+        def extract_bookmarks(bookmarks, level=0):
+            items = []
+            for bookmark in bookmarks:
+                if isinstance(bookmark, dict):
+                    item = {}
+                    if '/Title' in bookmark:
+                        item['title'] = bookmark['/Title']
+                    if '/Page' in bookmark:
+                        item['pageNumber'] = reader.get_destination_page_number(bookmark) + 1
+                    item['level'] = level
+                    
+                    # Extract children/subsections
+                    if '/First' in bookmark:
+                        item['children'] = extract_bookmarks(bookmark['/First'], level + 1)
+                    else:
+                        item['children'] = []
+                        
+                    items.append(item)
+                elif isinstance(bookmark, list):
+                    items.extend(extract_bookmarks(bookmark, level))
+            return items
+
+        # Try to get TOC from metadata
+        toc = []
         if hasattr(reader, 'outline') and reader.outline:
-            def extract_bookmarks(bookmarks, level=0):
-                items = []
-                for bookmark in bookmarks:
-                    if isinstance(bookmark, dict):
-                        if '/Title' in bookmark and '/Page' in bookmark:
-                            items.append({
-                                'title': bookmark['/Title'],
-                                'pageNumber': reader.get_destination_page_number(bookmark) + 1
-                            })
-                        if '/First' in bookmark:
-                            items.extend(extract_bookmarks(bookmark['/First'], level + 1))
-                    elif isinstance(bookmark, list):
-                        items.extend(extract_bookmarks(bookmark, level))
-                return items
-
             toc = extract_bookmarks(reader.outline)
-
+        
         # If no TOC in metadata, try to extract from content
         if not toc:
             # Use OpenAI to analyze the first page for potential TOC
@@ -196,27 +203,50 @@ def get_table_of_contents():
             response = get_openai_client().chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that extracts table of contents information from text. Return the information in a consistent format with page numbers."},
-                    {"role": "user", "content": f"Extract the table of contents from this text, if present:\n\n{text}"}
+                    {"role": "system", "content": "You are a helpful assistant that extracts hierarchical table of contents information from text. Return the information with proper indentation levels and page numbers."},
+                    {"role": "user", "content": f"Extract the hierarchical table of contents from this text, if present. Use indentation to show hierarchy:\n\n{text}"}
                 ],
                 max_tokens=500
             )
             
-            # Process the AI response to extract TOC items
+            # Process the AI response to extract hierarchical TOC
             ai_response = response.choices[0].message.content
-            # Simple parsing of AI response - you might want to make this more robust
             lines = ai_response.split('\n')
+            current_level = 0
+            stack = [{'children': toc}]  # Root level
+            
             for line in lines:
-                if line.strip():
-                    # Look for patterns like "Chapter 1: Introduction....... 5"
-                    parts = line.split('.')
-                    if len(parts) >= 2 and parts[-1].strip().isdigit():
-                        title = '.'.join(parts[:-1]).strip()
-                        page_num = int(parts[-1].strip())
-                        toc.append({
-                            'title': title,
-                            'pageNumber': page_num
-                        })
+                if not line.strip():
+                    continue
+                    
+                # Count leading spaces to determine level
+                spaces = len(line) - len(line.lstrip())
+                level = spaces // 2  # Assume 2 spaces per level
+                
+                # Extract title and page number
+                parts = line.strip().split('.')
+                if len(parts) >= 2 and parts[-1].strip().isdigit():
+                    title = '.'.join(parts[:-1]).strip()
+                    page_num = int(parts[-1].strip())
+                    
+                    # Create TOC item
+                    item = {
+                        'title': title,
+                        'pageNumber': page_num,
+                        'level': level,
+                        'children': []
+                    }
+                    
+                    # Adjust stack for current level
+                    while len(stack) > level + 1:
+                        stack.pop()
+                    
+                    # Add item to parent's children
+                    stack[-1]['children'].append(item)
+                    stack.append(item)
+            
+            # Extract final TOC from root
+            toc = stack[0]['children']
 
         return jsonify({'toc': toc}), 200
 

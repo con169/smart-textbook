@@ -89,30 +89,93 @@
 .toc-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
+  padding-left: 0;
 }
 
 .toc-item {
-  padding: 8px;
-  cursor: pointer;
-  color: #666;
   font-size: 14px;
-  line-height: 1.4;
-  border-radius: 4px;
+  color: #333;
 }
 
-.toc-item:hover {
-  background-color: #f8f9fa;
-  color: #4a90e2;
+.toc-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toc-item-header:hover {
+  background-color: #edf2f7;
+}
+
+.toc-item-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expand-button {
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  color: #666;
+}
+
+.expand-button:hover {
+  color: #333;
+}
+
+.toc-children {
+  margin-left: 24px;
+  position: relative;
+}
+
+.toc-children::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: #e2e8f0;
+}
+
+/* Indentation levels with visual hierarchy */
+.level-0 > .toc-item-header {
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.level-1 > .toc-item-header {
+  font-weight: 500;
+  color: #2d3748;
+}
+
+.level-2 > .toc-item-header {
+  font-weight: normal;
+  color: #4a5568;
 }
 
 .main-content {
   flex: 1;
-  background-color: #ffffff;
+  background-color: #f8f9fa;
   overflow-y: auto;
   display: flex;
   justify-content: center;
   padding: 20px;
+  scroll-behavior: smooth;
 }
 
 .pdf-document {
@@ -120,19 +183,72 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 40px;
+}
+
+.page-container {
+  min-height: 100px;  /* Reduced from 500px to be more dynamic */
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
 }
 
 .pdf-page {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   background-color: white;
   padding: 20px;
-  border-radius: 4px;
+  border-radius: 8px;
+  margin: 0 auto;
 }
 
 .pdf-page canvas {
   max-width: 100%;
   height: auto !important;
+  display: block;
+}
+
+.page-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 20px;
+  text-align: center;
+  color: #666;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: bounce 1s infinite;
+}
+
+.page-loading::after {
+  content: "...";
+  animation: ellipsis 1.5s infinite;
+  width: 1.5em;
+  display: inline-block;
+  text-align: left;
+}
+
+@keyframes ellipsis {
+  0% { content: "."; }
+  33% { content: ".."; }
+  66% { content: "..."; }
+  100% { content: "."; }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translate(-50%, -45%); }
+  50% { transform: translate(-50%, -55%); }
+}
+
+.current-page {
+  margin-bottom: 15px;
+  font-size: 14px;
+  color: #666;
+  text-align: left;
 }
 
 .questions-panel {
