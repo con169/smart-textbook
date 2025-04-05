@@ -4,6 +4,7 @@ from werkzeug.utils import secure_filename
 import PyPDF2
 import json
 from datetime import datetime
+from PyPDF2 import PdfReader
 
 bp = Blueprint('pdf', __name__, url_prefix='/api/pdf')
 
@@ -32,10 +33,42 @@ def upload_pdf():
         # Update the current PDF path in app config
         current_app.config['CURRENT_PDF'] = filepath
         
-        return jsonify({
-            'message': 'File uploaded successfully',
-            'filename': filename
-        }), 200
+        # Extract TOC if available
+        try:
+            reader = PdfReader(filepath)
+            toc = []
+            
+            if hasattr(reader, 'outline') and reader.outline:
+                def extract_bookmarks(bookmarks, level=0):
+                    items = []
+                    for item in bookmarks:
+                        if isinstance(item, dict):
+                            page_num = reader.get_destination_page_number(item)
+                            items.append({
+                                'title': item.get('/Title', 'Untitled'),
+                                'pageNumber': page_num + 1,
+                                'level': level,
+                                'children': []
+                            })
+                        elif isinstance(item, list):
+                            items.extend(extract_bookmarks(item, level + 1))
+                    return items
+                
+                toc = extract_bookmarks(reader.outline)
+            
+            return jsonify({
+                'message': 'File uploaded successfully',
+                'filename': filename,
+                'toc': toc
+            }), 200
+            
+        except Exception as e:
+            print(f"Error extracting TOC: {str(e)}")
+            return jsonify({
+                'message': 'File uploaded successfully but failed to extract TOC',
+                'filename': filename,
+                'toc': []
+            }), 200
     else:
         return jsonify({'error': 'Invalid file type. Please upload a PDF file.'}), 400
 

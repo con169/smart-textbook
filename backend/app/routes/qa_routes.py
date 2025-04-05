@@ -65,6 +65,10 @@ def ask_question():
         if not pdf_path or not os.path.exists(pdf_path):
             return jsonify({'error': 'Please upload a PDF file first'}), 404
 
+        print(f"Using PDF file: {pdf_path}")
+        print(f"Question: {question}")
+        print(f"Page: {page}")
+
         reader = PdfReader(pdf_path)
         if page < 1 or page > len(reader.pages):
             return jsonify({'error': f'Invalid page number. The document has {len(reader.pages)} pages.'}), 400
@@ -109,12 +113,16 @@ def ask_question():
                 
             context = f"text from pages {start_page} to {end_page}"
 
+        print(f"Extracted text length: {len(text)}")
+        print(f"Context: {context}")
+
         # Split text into chunks if it's too long
         chunks = chunk_text(text)
         all_responses = []
 
         # Process each chunk with OpenAI
-        for chunk in chunks:
+        for i, chunk in enumerate(chunks):
+            print(f"Processing chunk {i + 1} of {len(chunks)}")
             response = get_openai_client().chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
@@ -124,9 +132,11 @@ def ask_question():
                 max_tokens=500
             )
             all_responses.append(response.choices[0].message.content)
+            print(f"Got response for chunk {i + 1}")
 
         # Combine responses if there were multiple chunks
         final_answer = "\n\n".join(all_responses)
+        print("Final answer length:", len(final_answer))
         return jsonify({'answer': final_answer}), 200
 
     except Exception as e:
