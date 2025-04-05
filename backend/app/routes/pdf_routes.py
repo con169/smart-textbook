@@ -14,81 +14,30 @@ def allowed_file(filename):
 
 @bp.route('/upload', methods=['POST'])
 def upload_pdf():
-    print("\n=== PDF Upload Request ===")
-    print("Files in request:", request.files)
-    
+    """Handle PDF file upload"""
     if 'file' not in request.files:
-        print("Error: No file part in request")
         return jsonify({'error': 'No file part'}), 400
     
     file = request.files['file']
-    print("Received file:", file.filename)
-    
     if file.filename == '':
-        print("Error: No selected file")
         return jsonify({'error': 'No selected file'}), 400
-
-    if not allowed_file(file.filename):
-        print("Error: Invalid file type")
-        return jsonify({'error': 'Invalid file type. Only PDF files are allowed'}), 400
-
-    # Secure the filename
-    filename = secure_filename(file.filename)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    unique_filename = f"{timestamp}_{filename}"
-    print("Generated unique filename:", unique_filename)
     
-    # Save the file
-    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
-    print("Saving file to:", file_path)
-    file.save(file_path)
-    
-    # Extract text and metadata
-    try:
-        with open(file_path, 'rb') as pdf_file:
-            print("Reading PDF with PyPDF2...")
-            pdf_reader = PyPDF2.PdfReader(pdf_file)
-            
-            # Extract text from each page
-            text_content = []
-            print(f"Extracting text from {len(pdf_reader.pages)} pages...")
-            for page in pdf_reader.pages:
-                text_content.append(page.extract_text())
-            
-            # Get metadata
-            metadata = {
-                'title': filename,
-                'num_pages': len(pdf_reader.pages),
-                'upload_date': timestamp,
-                'file_path': file_path
-            }
-            print("Generated metadata:", metadata)
-            
-            # Save metadata and text content
-            metadata_path = os.path.join(current_app.config['UPLOAD_FOLDER'], f"{unique_filename}_metadata.json")
-            text_path = os.path.join(current_app.config['UPLOAD_FOLDER'], f"{unique_filename}_content.txt")
-            
-            print("Saving metadata to:", metadata_path)
-            with open(metadata_path, 'w', encoding='utf-8') as f:
-                json.dump(metadata, f)
-            
-            print("Saving text content to:", text_path)
-            with open(text_path, 'w', encoding='utf-8') as f:
-                f.write('\n---PAGE BREAK---\n'.join(text_content))
-            
-            print("Upload successful!")
-            return jsonify({
-                'message': 'File uploaded successfully',
-                'filename': unique_filename,
-                'metadata': metadata
-            }), 200
-            
-    except Exception as e:
-        print("Error processing PDF:", str(e))
-        # Clean up files if there's an error
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        return jsonify({'error': f'Error processing PDF: {str(e)}'}), 500
+    if file and file.filename.endswith('.pdf'):
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        
+        # Save the file
+        file.save(filepath)
+        
+        # Update the current PDF path in app config
+        current_app.config['CURRENT_PDF'] = filepath
+        
+        return jsonify({
+            'message': 'File uploaded successfully',
+            'filename': filename
+        }), 200
+    else:
+        return jsonify({'error': 'Invalid file type. Please upload a PDF file.'}), 400
 
 @bp.route('/list', methods=['GET'])
 def list_pdfs():

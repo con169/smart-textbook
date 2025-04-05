@@ -60,11 +60,12 @@ def ask_question():
         question = data['question']
         page = data.get('page', 1)
         
-        filename = os.path.join(current_app.config['UPLOAD_FOLDER'], 'current.pdf')
-        if not os.path.exists(filename):
+        # Get the PDF path from app config
+        pdf_path = current_app.config.get('CURRENT_PDF')
+        if not pdf_path or not os.path.exists(pdf_path):
             return jsonify({'error': 'Please upload a PDF file first'}), 404
 
-        reader = PdfReader(filename)
+        reader = PdfReader(pdf_path)
         if page < 1 or page > len(reader.pages):
             return jsonify({'error': f'Invalid page number. The document has {len(reader.pages)} pages.'}), 400
 
@@ -197,11 +198,48 @@ def upload_file():
         return jsonify({'error': 'No selected file'}), 400
     
     if file and file.filename.endswith('.pdf'):
+        # Save with a unique filename
         filename = os.path.join(current_app.config['UPLOAD_FOLDER'], 'current.pdf')
+        
+        # Save the file
         file.save(filename)
-        return jsonify({'message': 'File uploaded successfully'}), 200
-    
-    return jsonify({'error': 'Invalid file type'}), 400
+        
+        # Update the current PDF path in app config
+        current_app.config['CURRENT_PDF'] = filename
+        
+        # Extract table of contents if available
+        try:
+            reader = PdfReader(filename)
+            toc = []
+            if hasattr(reader, 'outline') and reader.outline:
+                def extract_bookmarks(bookmarks, level=0):
+                    items = []
+                    for item in bookmarks:
+                        if isinstance(item, dict):
+                            page_num = reader.get_destination_page_number(item)
+                            items.append({
+                                'title': item.get('/Title', 'Untitled'),
+                                'pageNumber': page_num + 1,
+                                'level': level,
+                                'children': []
+                            })
+                        elif isinstance(item, list):
+                            items.extend(extract_bookmarks(item, level + 1))
+                    return items
+                
+                toc = extract_bookmarks(reader.outline)
+            
+            return jsonify({
+                'message': 'File uploaded successfully',
+                'filename': os.path.basename(filename),
+                'toc': toc
+            }), 200
+            
+        except Exception as e:
+            print(f"Error processing PDF: {str(e)}")
+            return jsonify({'error': 'Error processing PDF file'}), 500
+    else:
+        return jsonify({'error': 'Invalid file type. Please upload a PDF file.'}), 400
 
 @bp.route('/get-toc', methods=['GET'])
 def get_table_of_contents():

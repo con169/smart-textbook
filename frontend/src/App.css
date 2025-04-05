@@ -44,7 +44,6 @@
 .app {
   display: flex;
   height: 100vh;
-  width: 100vw;
   overflow: hidden;
 }
 
@@ -62,16 +61,21 @@
 }
 
 .file-input {
-  display: none;
+  width: 100%;
 }
 
 .sidebar {
   width: 300px;
-  background-color: #ffffff;
-  border-right: 1px solid #e5e5e5;
-  padding: 20px;
-  overflow-y: auto;
-  flex-shrink: 0;
+  background-color: #f5f5f5;
+  border-right: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.file-upload {
+  padding: 1rem;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .sidebar h1 {
@@ -83,92 +87,53 @@
   border-bottom: 1px solid #e5e5e5;
 }
 
-.toc-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-left: 0;
+.table-of-contents {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
 }
 
 .toc-item {
-  font-size: 14px;
-  color: #333;
+  margin: 0.5rem 0;
 }
 
 .toc-item-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.toc-item-header:hover {
-  background-color: #edf2f7;
+  gap: 0.5rem;
 }
 
 .toc-item-title {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  cursor: pointer;
+  color: #2196f3;
+}
+
+.toc-item-title:hover {
+  text-decoration: underline;
 }
 
 .expand-button {
-  padding: 0;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 10px;
+  padding: 0;
+  font-size: 12px;
   color: #666;
 }
 
-.expand-button:hover {
-  color: #333;
-}
-
 .toc-children {
-  margin-left: 24px;
-  position: relative;
+  margin-left: 1.5rem;
 }
 
-.toc-children::before {
-  content: '';
-  position: absolute;
-  left: -12px;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background-color: #e2e8f0;
-}
-
-/* Indentation levels with visual hierarchy */
-.level-0 > .toc-item-header {
-  font-weight: 600;
-  color: #1a202c;
-}
-
-.level-1 > .toc-item-header {
-  font-weight: 500;
-  color: #2d3748;
-}
-
-.level-2 > .toc-item-header {
-  font-weight: normal;
-  color: #4a5568;
-}
+.level-1 { margin-left: 0; }
+.level-2 { margin-left: 1rem; }
+.level-3 { margin-left: 2rem; }
+.level-4 { margin-left: 3rem; }
 
 .main-content {
   flex: 1;
-  overflow-y: auto;
-  background-color: #f7f7f8;
+  overflow: hidden;
+  background-color: #e0e0e0;
   position: relative;
 }
 
@@ -432,9 +397,8 @@
 
 .chat-panel {
   width: 400px;
-  background-color: #ffffff;
-  border-left: 1px solid #e5e5e5;
+  border-left: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
+  background-color: white;
 }
