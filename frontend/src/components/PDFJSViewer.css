@@ -1,0 +1,41 @@
+.pdfjs-container {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: var(--background-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pdfjs-page-container {
+  margin: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background-color: white;
+}
+
+.pdfjs-text-layer {
+  opacity: 0.2;
+  mix-blend-mode: multiply;
+}
+
+.pdfjs-text-layer > span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.pdfjs-text-layer > span::selection {
+  background: rgba(0, 0, 255, 0.3);
+}
+
+/* Dark mode adjustments */
+[data-theme='dark'] .pdfjs-page-container {
+  background-color: rgb(250, 250, 250); /* Keep PDF background white for readability */
+}
+
+[data-theme='dark'] .pdfjs-text-layer > span::selection {
+  background: rgba(100, 150, 255, 0.3);
+} 

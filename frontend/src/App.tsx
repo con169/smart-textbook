@@ -1,60 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import './App.css';
+import PDFJSViewer from './components/PDFJSViewer';
 import ChatInterface from './components/ChatInterface';
-import PDFViewer from './components/PDFViewer';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 interface TableOfContentsItem {
   title: string;
-  pageNumber: number;
+  page: number;
   level: number;
-  children: TableOfContentsItem[];
+  children?: TableOfContentsItem[];
 }
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
-
-// Add TOC Item component for recursion
-const TOCItem: React.FC<{
-  item: TableOfContentsItem;
-  onPageChange: (pageNumber: number) => void;
-}> = ({ item, onPageChange }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
-
-  return (
-    <div className={`toc-item level-${item.level}`}>
-      <div className="toc-item-header">
-        {item.children.length > 0 && (
-          <button 
-            className={`expand-button ${isExpanded ? 'expanded' : ''}`}
-            onClick={() => setIsExpanded(!isExpanded)}
-          >
-            {isExpanded ? '▼' : '▶'}
-          </button>
-        )}
-        <div 
-          className="toc-item-title"
-          onClick={() => onPageChange(item.pageNumber)}
-        >
-          {item.title}
-        </div>
-      </div>
-      {isExpanded && item.children.length > 0 && (
-        <div className="toc-children">
-          {item.children.map((child, index) => (
-            <TOCItem
-              key={index}
-              item={child}
-              onPageChange={onPageChange}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
 
 function App() {
   const [file, setFile] = useState<string | null>(null);
@@ -167,11 +127,13 @@ function App() {
           </div>
         </div>
         <div className="main-content">
-          <PDFViewer
-            file={file}
-            currentPage={currentPage}
-            onPageChange={setCurrentPage}
-          />
+          {file && (
+            <PDFJSViewer
+              file={file}
+              currentPage={currentPage}
+              onPageChange={setCurrentPage}
+            />
+          )}
         </div>
         <div className="chat-panel">
           <ChatInterface
@@ -184,5 +146,47 @@ function App() {
     </ThemeProvider>
   );
 }
+
+interface TOCItemProps {
+  item: TableOfContentsItem;
+  onPageChange: (page: number) => void;
+}
+
+const TOCItem: React.FC<TOCItemProps> = ({ item, onPageChange }) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const hasChildren = item.children && item.children.length > 0;
+
+  return (
+    <div className={`toc-item level-${item.level}`}>
+      <div className="toc-item-header">
+        {hasChildren && (
+          <button
+            className="expand-button"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            {isExpanded ? '▼' : '▶'}
+          </button>
+        )}
+        <span
+          className="toc-item-title"
+          onClick={() => onPageChange(item.page)}
+        >
+          {item.title}
+        </span>
+      </div>
+      {hasChildren && isExpanded && (
+        <div className="toc-children">
+          {item.children!.map((child, index) => (
+            <TOCItem
+              key={index}
+              item={child}
+              onPageChange={onPageChange}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default App;
