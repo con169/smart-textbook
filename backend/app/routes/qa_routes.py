@@ -58,34 +58,79 @@ def ask_question():
             return jsonify({'error': 'No question provided'}), 400
 
         question = data['question']
-        page_number = data.get('page', 1)
+        page = data.get('page', 1)
         
         filename = os.path.join(current_app.config['UPLOAD_FOLDER'], 'current.pdf')
         if not os.path.exists(filename):
-            return jsonify({'error': 'No PDF file uploaded'}), 404
+            return jsonify({'error': 'Please upload a PDF file first'}), 404
 
         reader = PdfReader(filename)
-        if page_number < 1 or page_number > len(reader.pages):
-            return jsonify({'error': 'Invalid page number'}), 400
+        if page < 1 or page > len(reader.pages):
+            return jsonify({'error': f'Invalid page number. The document has {len(reader.pages)} pages.'}), 400
 
-        # Extract text from the specified page
-        page = reader.pages[page_number - 1]
-        text = page.extract_text()
+        # If asking about a chapter, find chapter boundaries
+        is_chapter_query = 'chapter' in question.lower()
+        text = ""
+        
+        if is_chapter_query:
+            # Find chapter boundaries from TOC
+            chapter_start = 1
+            chapter_end = page
+            next_chapter_start = len(reader.pages)
+            
+            if hasattr(reader, 'outline') and reader.outline:
+                for item in reader.outline:
+                    if isinstance(item, dict):
+                        item_page = reader.get_destination_page_number(item) + 1
+                        if item_page <= page:
+                            chapter_start = item_page
+                        elif item_page > page:
+                            next_chapter_start = item_page
+                            break
+                chapter_end = next_chapter_start - 1
+            
+            # Extract text from the entire chapter
+            for page_num in range(chapter_start - 1, chapter_end):
+                current_page = reader.pages[page_num]
+                text += f"\n\n=== Page {page_num + 1} ===\n\n"
+                text += current_page.extract_text()
+                
+            context = f"text from Chapter pages {chapter_start} to {chapter_end}"
+        else:
+            # For non-chapter queries, use current page and neighbors
+            start_page = max(1, page - 1)
+            end_page = min(len(reader.pages), page + 1)
+            
+            for page_num in range(start_page - 1, end_page):
+                current_page = reader.pages[page_num]
+                text += f"\n\n=== Page {page_num + 1} ===\n\n"
+                text += current_page.extract_text()
+                
+            context = f"text from pages {start_page} to {end_page}"
 
-        # Get response from OpenAI
-        response = get_openai_client().chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that answers questions about the content of a book. Base your answers only on the provided text."},
-                {"role": "user", "content": f"Here is the text from page {page_number}:\n\n{text}\n\nQuestion: {question}"}
-            ],
-            max_tokens=500
-        )
+        # Split text into chunks if it's too long
+        chunks = chunk_text(text)
+        all_responses = []
 
-        return jsonify({'answer': response.choices[0].message.content}), 200
+        # Process each chunk with OpenAI
+        for chunk in chunks:
+            response = get_openai_client().chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that answers questions about the content of a book. Base your answers only on the provided text. If you cannot find relevant information in the text, say so clearly. If asked about a chapter, try to provide a comprehensive summary of the chapter's content."},
+                    {"role": "user", "content": f"Here is the {context}:\n\n{chunk}\n\nQuestion: {question}"}
+                ],
+                max_tokens=500
+            )
+            all_responses.append(response.choices[0].message.content)
+
+        # Combine responses if there were multiple chunks
+        final_answer = "\n\n".join(all_responses)
+        return jsonify({'answer': final_answer}), 200
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error in ask_question: {str(e)}")
+        return jsonify({'error': 'Error processing request. Please make sure a PDF is uploaded and try again.'}), 500
 
 @bp.route('/history/<filename>', methods=['GET'])
 def get_qa_history(filename):

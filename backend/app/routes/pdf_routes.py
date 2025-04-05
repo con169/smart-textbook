@@ -2,7 +2,6 @@ from flask import Blueprint, request, jsonify, current_app
 import os
 from werkzeug.utils import secure_filename
 import PyPDF2
-import magic
 import json
 from datetime import datetime
 
@@ -47,17 +46,6 @@ def upload_pdf():
     # Extract text and metadata
     try:
         with open(file_path, 'rb') as pdf_file:
-            print("Verifying PDF using python-magic...")
-            # Verify it's actually a PDF using python-magic
-            file_type = magic.from_buffer(pdf_file.read(2048), mime=True)
-            print("Detected file type:", file_type)
-            
-            if file_type != 'application/pdf':
-                print("Error: File content is not PDF")
-                os.remove(file_path)
-                return jsonify({'error': 'Invalid file type. File content is not PDF'}), 400
-            
-            pdf_file.seek(0)
             print("Reading PDF with PyPDF2...")
             pdf_reader = PyPDF2.PdfReader(pdf_file)
             
