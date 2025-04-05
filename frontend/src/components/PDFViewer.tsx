@@ -28,6 +28,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
   const [ttsError, setTtsError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [speed, setSpeed] = useState<number>(1.0);
+  const [currentParagraph, setCurrentParagraph] = useState<number | null>(null);
+  const [readyPages, setReadyPages] = useState<Set<number>>(new Set());
 
   // Effect to handle page changes from TOC
   useEffect(() => {
@@ -36,6 +38,56 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
       pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [currentPage]);
+
+  // Effect to handle text highlighting
+  useEffect(() => {
+    // Remove previous highlights
+    document.querySelectorAll('.highlighted-text').forEach(el => {
+      el.classList.remove('highlighted-text');
+    });
+
+    // Add new highlight only if the current page is ready
+    if (currentParagraph !== null && readyPages.has(currentPage)) {
+      const textLayer = document.querySelector(`.page-container[data-page="${currentPage}"] .react-pdf__Page__textContent`);
+      if (textLayer) {
+        const textElements = Array.from(textLayer.querySelectorAll('span'));
+        const lines: HTMLElement[][] = [];
+        let currentLine: HTMLElement[] = [];
+        let lastY = -1;
+
+        // Group elements by vertical position
+        textElements.forEach(el => {
+          const rect = el.getBoundingClientRect();
+          if (lastY === -1 || Math.abs(rect.top - lastY) < 5) {
+            currentLine.push(el as HTMLElement);
+          } else {
+            if (currentLine.length > 0) {
+              lines.push([...currentLine]);
+            }
+            currentLine = [el as HTMLElement];
+          }
+          lastY = rect.top;
+        });
+
+        if (currentLine.length > 0) {
+          lines.push(currentLine);
+        }
+
+        // Highlight the current line
+        if (lines[currentParagraph]) {
+          lines[currentParagraph].forEach(el => {
+            el.classList.add('highlighted-text');
+          });
+
+          // Scroll the first element into view
+          lines[currentParagraph][0]?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+          });
+        }
+      }
+    }
+  }, [currentParagraph, currentPage, readyPages]);
 
   useEffect(() => {
     // Fetch available voices when component mounts
@@ -74,57 +126,125 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
 
   const playPageAudio = async () => {
     try {
-        setIsPlaying(true);
-        setTtsError('');
-        setIsLoading(true);
-        
-        const response = await fetch('http://localhost:5000/api/tts/read-pdf', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                page: currentPage,
-                voice_id: selectedVoice,
-                speed: speed
-            }),
-        });
+      setIsPlaying(true);
+      setTtsError('');
+      setIsLoading(true);
+      setCurrentParagraph(null);
+      
+      if (!readyPages.has(currentPage)) {
+        throw new Error('Text layer not ready. Please wait for the page to fully load.');
+      }
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to generate audio');
+      const textLayer = document.querySelector(`.page-container[data-page="${currentPage}"] .react-pdf__Page__textContent`);
+      if (!textLayer) {
+        throw new Error('Text layer not found');
+      }
+
+      // Get text content organized by lines
+      const textElements = Array.from(textLayer.querySelectorAll('span'));
+      const lines: string[] = [];
+      let currentLine: HTMLElement[] = [];
+      let lastY = -1;
+
+      textElements.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        if (lastY === -1 || Math.abs(rect.top - lastY) < 5) {
+          currentLine.push(el as HTMLElement);
+        } else {
+          if (currentLine.length > 0) {
+            lines.push(currentLine.map(el => el.textContent || '').join(' ').trim());
+          }
+          currentLine = [el as HTMLElement];
         }
+        lastY = rect.top;
+      });
 
-        const blob = await response.blob();
-        const audioUrl = URL.createObjectURL(blob);
+      if (currentLine.length > 0) {
+        lines.push(currentLine.map(el => el.textContent || '').join(' ').trim());
+      }
+
+      const nonEmptyLines = lines.filter(line => line.trim().length > 0);
+
+      const response = await fetch('http://localhost:5000/api/tts/read-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          page: currentPage,
+          voice_id: selectedVoice,
+          speed: speed,
+          lines: nonEmptyLines
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate audio');
+      }
+
+      // Get the audio blob from the response
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      if (audioElement) {
+        audioElement.pause();
+        URL.revokeObjectURL(audioElement.src);
+      }
+
+      const audio = new Audio(audioUrl);
+      audio.playbackRate = speed;
+      setAudioElement(audio);
+      
+      // Set up time update handler for highlighting
+      let currentTime = 0;
+      const avgCharsPerSecond = 15 / speed;
+      
+      audio.ontimeupdate = () => {
+        if (!readyPages.has(currentPage)) return;
         
-        if (audioElement) {
-            audioElement.pause();
-            URL.revokeObjectURL(audioElement.src);
-        }
-
-        const audio = new Audio(audioUrl);
-        audio.playbackRate = speed;
-        setAudioElement(audio);
+        const newTime = audio.currentTime;
+        if (Math.floor(newTime) !== Math.floor(currentTime)) {
+          currentTime = newTime;
+          
+          let totalChars = 0;
+          let currentIndex = 0;
+          
+          for (let i = 0; i < nonEmptyLines.length; i++) {
+            totalChars += nonEmptyLines[i].length;
+            const timeForText = totalChars / (15 / speed); // 15 chars per second
             
-        audio.onended = () => {
-            setIsPlaying(false);
-            URL.revokeObjectURL(audioUrl);
-        };
+            if (timeForText > currentTime) {
+              currentIndex = i;
+              break;
+            }
+          }
+          
+          setCurrentParagraph(currentIndex);
+        }
+      };
 
-        audio.onerror = () => {
-            setIsPlaying(false);
-            setTtsError('Failed to play audio');
-            URL.revokeObjectURL(audioUrl);
-        };
-
-        await audio.play();
-    } catch (error) {
-        console.error('Error playing audio:', error);
-        setTtsError(error instanceof Error ? error.message : 'Failed to generate audio');
+      audio.onended = () => {
         setIsPlaying(false);
+        setCurrentParagraph(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.onerror = () => {
+        setIsPlaying(false);
+        setCurrentParagraph(null);
+        setTtsError('Failed to play audio');
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      await audio.play();
+    } catch (error) {
+      console.error('Error playing audio:', error);
+      setTtsError(error instanceof Error ? error.message : 'Failed to generate audio');
+      setIsPlaying(false);
+      setCurrentParagraph(null);
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -132,6 +252,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
     if (audioElement) {
       audioElement.pause();
       setIsPlaying(false);
+      setCurrentParagraph(null);
     }
   };
 
@@ -228,7 +349,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
                   className="pdf-page"
                   renderTextLayer={true}
                   renderAnnotationLayer={true}
-                  onLoadSuccess={() => {
+                  onLoadSuccess={(page) => {
                     // Update current page based on scroll position
                     const observer = new IntersectionObserver(
                       (entries) => {
@@ -252,13 +373,45 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
                       observer.observe(element);
                     }
 
+                    // Wait for text layer to be ready
+                    const waitForTextLayer = () => {
+                      const textLayer = element?.querySelector('.react-pdf__Page__textContent');
+                      if (textLayer) {
+                        // Set opacity to 0 once we confirm text layer is positioned correctly
+                        (textLayer as HTMLElement).style.opacity = '0';
+                        setReadyPages(prev => new Set([...prev, pageNumber]));
+                        return true;
+                      }
+                      return false;
+                    };
+
+                    if (!waitForTextLayer()) {
+                      const interval = setInterval(() => {
+                        if (waitForTextLayer()) {
+                          clearInterval(interval);
+                        }
+                      }, 100);
+
+                      setTimeout(() => clearInterval(interval), 5000);
+                    }
+
                     return () => {
                       if (element) {
                         observer.unobserve(element);
                       }
+                      setReadyPages(prev => {
+                        const next = new Set(prev);
+                        next.delete(pageNumber);
+                        return next;
+                      });
                     };
                   }}
                 />
+                {!readyPages.has(pageNumber) && (
+                  <div className="text-layer-loading">
+                    Loading text layer...
+                  </div>
+                )}
               </div>
             ))}
           </Document>

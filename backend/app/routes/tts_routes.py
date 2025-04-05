@@ -59,34 +59,22 @@ def read_pdf_page():
         if not data:
             return jsonify({'error': 'No JSON data received'}), 400
         
-        if 'page' not in data or 'voice_id' not in data:
-            return jsonify({'error': 'Missing required fields: page and voice_id'}), 400
+        if 'page' not in data or 'voice_id' not in data or 'lines' not in data:
+            return jsonify({'error': 'Missing required fields: page, voice_id, and lines'}), 400
 
         api_key = get_elevenlabs_api_key()
         if not api_key:
             return jsonify({'error': 'ElevenLabs API key not configured'}), 500
 
-        # Get the PDF path from the app config
-        pdf_path = current_app.config.get('CURRENT_PDF')
-        if not pdf_path or not os.path.exists(pdf_path):
-            return jsonify({'error': 'No PDF file loaded'}), 400
+        # Get the text from the lines array
+        lines = data['lines']
+        if not lines:
+            return jsonify({'error': 'No text found on this page'}), 400
 
-        # Extract text from the specified page
-        try:
-            reader = PdfReader(pdf_path)
-            page_num = int(data['page']) - 1  # Convert to 0-based index
-            
-            if page_num < 0 or page_num >= len(reader.pages):
-                return jsonify({'error': f'Invalid page number. Valid range: 1 to {len(reader.pages)}'}), 400
-            
-            page = reader.pages[page_num]
-            text = page.extract_text()
-            
-            if not text.strip():
-                return jsonify({'error': 'No text found on this page'}), 400
-
-        except Exception as e:
-            return jsonify({'error': f'Failed to extract text from PDF: {str(e)}'}), 500
+        # Join lines with proper spacing
+        text = '\n'.join(lines)
+        if not text.strip():
+            return jsonify({'error': 'No text found on this page'}), 400
 
         # Get speed parameter (default to 1.0 if not provided)
         speed = float(data.get('speed', 1.0))
@@ -119,18 +107,18 @@ def read_pdf_page():
             audio_data.seek(0)
             
             # Generate a temporary filename
-            temp_path = os.path.join(current_app.config['UPLOAD_FOLDER'], f'temp_audio_page_{page_num + 1}.mp3')
+            temp_path = os.path.join(current_app.config['UPLOAD_FOLDER'], f'temp_audio_page_{data["page"]}.mp3')
             
             # Save the audio file
             with open(temp_path, 'wb') as f:
                 f.write(audio_data.read())
             
-            # Return the audio file
+            # Return the audio file directly
             return send_file(
                 temp_path,
                 mimetype='audio/mpeg',
                 as_attachment=True,
-                download_name=f'page_{page_num + 1}.mp3'
+                download_name=f'page_{data["page"]}.mp3'
             )
         else:
             return jsonify({'error': f"ElevenLabs API Error: {response.text}"}), response.status_code
