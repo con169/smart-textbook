@@ -108,12 +108,25 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
   // Expose scrollToPage function to parent
   useImperativeHandle(ref, () => ({
     scrollToPage: (pageNumber: number) => {
+      console.log('scrollToPage called with:', pageNumber);
       const targetPage = Math.max(1, Math.min(pageNumber, numPages));
+      console.log('Target page after bounds check:', targetPage);
+      
       const pageElement = pageRefs.current.get(targetPage);
+      console.log('Found page element:', !!pageElement);
+      
       if (pageElement) {
         // Mark this page as needing to scroll
         pageElement.setAttribute('data-needs-scroll', 'true');
+        // Ensure the page is rendered
+        if (!pageElement.hasChildNodes()) {
+          console.log('Page not rendered, rendering now');
+          renderPage(targetPage, pageElement);
+        }
+        // Update the page number
         onPageChange(targetPage);
+      } else {
+        console.log('Page element not found in refs');
       }
     }
   }));

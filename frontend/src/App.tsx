@@ -25,6 +25,47 @@ function App() {
   const [chatIsLoading, setChatIsLoading] = useState(false);
   const pdfViewerRef = useRef<PDFJSViewerRef>(null);
 
+  const handleTocClick = (page: number) => {
+    console.log('Raw page number from TOC click:', page);
+    if (typeof page !== 'number' || isNaN(page)) {
+      console.error('Invalid page number from TOC:', page);
+      return;
+    }
+    
+    // PDF.js uses 1-based page numbers
+    const targetPage = Math.max(1, page);
+    console.log('TOC clicked, navigating to page:', targetPage);
+    
+    if (pdfViewerRef.current) {
+      pdfViewerRef.current.scrollToPage(targetPage);
+    }
+  };
+
+  // Get table of contents from the backend
+  const fetchTOC = async () => {
+    try {
+      const tocResponse = await fetch('http://localhost:5000/api/qa/get-toc');
+      if (tocResponse.ok) {
+        const tocData = await tocResponse.json();
+        console.log('Raw TOC data from backend:', tocData);
+        
+        // Validate and transform TOC data
+        const validatedTOC = (tocData.toc || []).map((item: any) => {
+          console.log('Processing TOC item:', item);
+          return {
+            ...item,
+            page: item.pageNumber || 1, // Convert pageNumber to page
+            pageNumber: undefined // Remove the old property
+          };
+        });
+        console.log('Validated TOC:', validatedTOC);
+        setTableOfContents(validatedTOC);
+      }
+    } catch (error) {
+      console.error('Error fetching TOC:', error);
+    }
+  };
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (selectedFile && selectedFile.type === 'application/pdf') {
@@ -49,18 +90,14 @@ function App() {
           throw new Error('Failed to upload file');
         }
 
-        // Get table of contents from the backend
-        const tocResponse = await fetch('http://localhost:5000/api/qa/get-toc');
-        if (tocResponse.ok) {
-          const tocData = await tocResponse.json();
-          setTableOfContents(tocData.toc || []);
-          
-          // Add welcome message
-          setMessages([{
-            role: 'assistant',
-            content: `I've loaded your PDF. I can answer questions about what you're currently viewing. Navigate to a specific page and ask me questions about its content. Currently showing page ${currentPage}.`
-          }]);
-        }
+        // Fetch TOC after successful upload
+        await fetchTOC();
+        
+        // Add welcome message
+        setMessages([{
+          role: 'assistant',
+          content: `I've loaded your PDF. I can answer questions about what you're currently viewing. Navigate to a specific page and ask me questions about its content. Currently showing page ${currentPage}.`
+        }]);
       } catch (error) {
         console.error('Error:', error);
         setMessages([{
@@ -102,12 +139,6 @@ function App() {
       }]);
     } finally {
       setChatIsLoading(false);
-    }
-  };
-
-  const handleTocClick = (page: number) => {
-    if (pdfViewerRef.current) {
-      pdfViewerRef.current.scrollToPage(page);
     }
   };
 
@@ -164,6 +195,17 @@ const TOCItem: React.FC<TOCItemProps> = ({ item, onPageChange }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const hasChildren = item.children && item.children.length > 0;
 
+  const handleClick = () => {
+    console.log('TOC item clicked:', item);
+    const pageNum = item.page;
+    if (typeof pageNum === 'number' && !isNaN(pageNum)) {
+      console.log('Calling onPageChange with page:', pageNum);
+      onPageChange(pageNum);
+    } else {
+      console.error('Invalid page number in TOC item:', item);
+    }
+  };
+
   return (
     <div className={`toc-item level-${item.level}`}>
       <div className="toc-item-header">
@@ -177,9 +219,10 @@ const TOCItem: React.FC<TOCItemProps> = ({ item, onPageChange }) => {
         )}
         <span
           className="toc-item-title"
-          onClick={() => onPageChange(item.page)}
+          onClick={handleClick}
+          title={`Go to page ${item.page}`}
         >
-          {item.title}
+          {item.title} (Page {item.page})
         </span>
       </div>
       {hasChildren && isExpanded && (
