@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import './App.css';
 
@@ -51,6 +51,13 @@ const TOCItem: React.FC<{
   );
 };
 
+// Add this function at the top level
+const getPageRange = (currentPage: number, totalPages: number | null, window: number = 5) => {
+  const start = Math.max(1, currentPage - window);
+  const end = Math.min(totalPages || currentPage + window, currentPage + window);
+  return { start, end };
+};
+
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [numPages, setNumPages] = useState<number | null>(null);
@@ -60,6 +67,11 @@ function App() {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const pdfContainerRef = React.useRef<HTMLDivElement>(null);
+  const [loadedPages, setLoadedPages] = useState<Set<number>>(new Set([1]));
+  const [renderedPages, setRenderedPages] = useState<Set<number>>(new Set());
+  const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const scrollTimeout = useRef<number>();
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -118,80 +130,128 @@ function App() {
     }
   };
 
+  // Track both loaded and rendered states
+  const loadPage = (pageNumber: number) => {
+    if (!numPages || pageNumber < 1 || pageNumber > numPages) {
+      return;
+    }
+
+    setLoadedPages(prev => {
+      const newLoaded = new Set(prev);
+      newLoaded.add(pageNumber);
+      return newLoaded;
+    });
+  };
+
+  // Handle successful page render
+  const handlePageRenderSuccess = (pageNumber: number) => {
+    setRenderedPages(prev => {
+      const newRendered = new Set(prev);
+      newRendered.add(pageNumber);
+      return newRendered;
+    });
+  };
+
+  // Load pages more aggressively during scroll
+  const handleScroll = (event?: Event) => {
+    if (!pdfContainerRef.current || !numPages) return;
+
+    const container = pdfContainerRef.current.closest('.main-content');
+    if (!container) return;
+
+    const scrollTop = container.scrollTop;
+    const viewportHeight = container.clientHeight;
+    
+    // Get all page containers
+    const pageContainers = Array.from(pdfContainerRef.current.querySelectorAll('.page-container'));
+    
+    // Find the current page based on scroll position
+    let currentPageFound = false;
+    pageContainers.forEach((container, index) => {
+      const rect = container.getBoundingClientRect();
+      const pageNumber = index + 1;
+      
+      // If this page is in view
+      if (!currentPageFound && rect.top <= viewportHeight/2 && rect.bottom >= viewportHeight/2) {
+        setCurrentPage(pageNumber);
+        currentPageFound = true;
+      }
+      
+      // Load pages within 4 viewport heights above and below
+      if (rect.top <= viewportHeight * 4 && rect.bottom >= -viewportHeight * 4) {
+        loadPage(pageNumber);
+      }
+    });
+  };
+
+  // Debounced scroll handler
+  const debouncedScroll = () => {
+    if (scrollTimeout.current) {
+      window.clearTimeout(scrollTimeout.current);
+    }
+    scrollTimeout.current = window.setTimeout(handleScroll, 100);
+  };
+
+  // Scroll listener with both immediate and debounced updates
+  useEffect(() => {
+    if (!pdfContainerRef.current) return;
+
+    const mainContent = pdfContainerRef.current.closest('.main-content');
+    if (!mainContent) return;
+
+    let ticking = false;
+    const scrollListener = () => {
+      // Immediate scroll handler for responsive UI
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          handleScroll();
+          ticking = false;
+        });
+        ticking = true;
+      }
+      // Debounced handler for thorough loading
+      debouncedScroll();
+    };
+
+    mainContent.addEventListener('scroll', scrollListener, { passive: true });
+    // Initial load with a dummy scroll event
+    handleScroll(new Event('scroll'));
+
+    return () => {
+      mainContent.removeEventListener('scroll', scrollListener);
+      if (scrollTimeout.current) {
+        window.clearTimeout(scrollTimeout.current);
+      }
+    };
+  }, [numPages]);
+
+  // Load more pages when jumping
   const handlePageChange = (pageNumber: number) => {
+    if (!numPages || pageNumber < 1 || pageNumber > numPages) return;
+
     setCurrentPage(pageNumber);
     
-    // Calculate a window of pages to load around the target page
-    const windowSize = 2; // Reduced window size for better performance
-    const pagesToLoad = new Set<number>();
-    
-    // Add the target page and immediate neighbors
-    pagesToLoad.add(pageNumber);
-    pagesToLoad.add(pageNumber - 1);
-    pagesToLoad.add(pageNumber + 1);
-    
-    // Add some pages before and after
-    for (let i = Math.max(1, pageNumber - windowSize); i <= Math.min((numPages || 0), pageNumber + windowSize); i++) {
-      pagesToLoad.add(i);
+    // Load more pages around the target (7 pages in each direction)
+    for (let i = Math.max(1, pageNumber - 7); i <= Math.min(numPages, pageNumber + 7); i++) {
+      loadPage(i);
     }
-    
-    // Convert Set to Array and filter out invalid page numbers
-    const pagesToRender = Array.from(pagesToLoad).filter(p => p > 0 && p <= (numPages || 0));
-    setVisiblePages(pagesToRender);
 
-    // Scroll to the target page with offset for header
-    const targetElement = document.querySelector(`[data-page-number="${pageNumber}"]`);
-    if (targetElement) {
-      const offset = 80; // Adjust this value based on your header height
-      const elementPosition = targetElement.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - offset;
-      
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth'
-      });
+    const targetPage = pageRefs.current[pageNumber - 1];
+    if (targetPage) {
+      targetPage.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
-  // Update the intersection observer to handle more pages
-  useEffect(() => {
-    if (!numPages) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const pageNumber = parseInt(entry.target.getAttribute('data-page-number') || '1');
-          
-          if (entry.isIntersecting) {
-            // When a page becomes visible, update the current page
-            setCurrentPage(pageNumber);
-            
-            // Add this page and its neighbors to visible pages
-            setVisiblePages(prev => {
-              const newPages = new Set(prev);
-              // Add current page and immediate neighbors
-              newPages.add(pageNumber);
-              if (pageNumber > 1) newPages.add(pageNumber - 1);
-              if (pageNumber < (numPages || 0)) newPages.add(pageNumber + 1);
-              return Array.from(newPages).sort((a, b) => a - b);
-            });
-          }
-        });
-      },
-      {
-        root: null,
-        rootMargin: '100px 0px',
-        threshold: 0.1
-      }
-    );
-
-    // Observe all page containers
-    document.querySelectorAll('.page-container').forEach((pageContainer) => {
-      observer.observe(pageContainer);
-    });
-
-    return () => observer.disconnect();
-  }, [numPages]);
+  const onLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+    // Load more pages initially (first 15 pages)
+    const initialPages = new Set<number>();
+    for (let i = 1; i <= Math.min(numPages, 15); i++) {
+      initialPages.add(i);
+    }
+    setLoadedPages(initialPages);
+    setVisiblePages([1]);
+  };
 
   return (
     <div className="app">
@@ -226,11 +286,7 @@ function App() {
           <main className="main-content">
             <Document
               file={file}
-              onLoadSuccess={({ numPages }) => {
-                setNumPages(numPages);
-                // Initialize with first few pages
-                setVisiblePages([1, 2, 3]);
-              }}
+              onLoadSuccess={onLoadSuccess}
               className="pdf-document"
               loading={
                 <div className="page-loading">
@@ -238,27 +294,41 @@ function App() {
                 </div>
               }
             >
-              {Array.from(new Array(numPages), (_, index) => (
-                <div 
-                  key={`page-container-${index + 1}`}
-                  className="page-container"
-                  data-page-number={index + 1}
-                >
-                  {visiblePages.includes(index + 1) && (
-                    <Page
-                      key={`page_${index + 1}`}
-                      pageNumber={index + 1}
-                      className="pdf-page"
-                      width={window.innerWidth * 0.5}
-                      loading={
-                        <div className="page-loading">
-                          Loading page {index + 1}
-                        </div>
-                      }
-                    />
-                  )}
-                </div>
-              ))}
+              {Array.from(new Array(numPages), (_, index) => {
+                const pageNumber = index + 1;
+                return (
+                  <div 
+                    key={`page-container-${pageNumber}`}
+                    className="page-container"
+                    data-page-number={pageNumber}
+                    ref={(el: HTMLDivElement | null) => {
+                      pageRefs.current[index] = el;
+                    }}
+                  >
+                    {loadedPages.has(pageNumber) && (
+                      <Page
+                        key={`page_${pageNumber}`}
+                        pageNumber={pageNumber}
+                        className="pdf-page"
+                        width={Math.min(800, window.innerWidth * 0.45)} // Limit max width
+                        renderTextLayer={true}
+                        renderAnnotationLayer={true}
+                        loading={
+                          <div className="page-loading">
+                            Loading page {pageNumber}...
+                          </div>
+                        }
+                        onRenderSuccess={() => handlePageRenderSuccess(pageNumber)}
+                        error={
+                          <div className="page-error">
+                            Error loading page {pageNumber}. Retrying...
+                          </div>
+                        }
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </Document>
           </main>
 

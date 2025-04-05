@@ -173,40 +173,61 @@
   background-color: #f8f9fa;
   overflow-y: auto;
   display: flex;
-  justify-content: center;
-  padding: 20px;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
   scroll-behavior: smooth;
+  height: 100vh;
+  position: relative;
 }
 
 .pdf-document {
   max-width: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 40px;
+  gap: 8px;
 }
 
 .page-container {
-  min-height: 100px;  /* Reduced from 500px to be more dynamic */
   width: 100%;
   display: flex;
   justify-content: center;
-  align-items: center;
+  margin: 8px 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   position: relative;
 }
 
+/* Override PDF.js default styles */
 .pdf-page {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  margin: 0 auto;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  display: block !important;
+}
+
+/* Target the actual page wrapper from PDF.js */
+.pdf-page > div {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Target the canvas wrapper */
+.pdf-page > div > div {
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .pdf-page canvas {
   max-width: 100%;
   height: auto !important;
   display: block;
+  margin: 0;
+  padding: 0;
 }
 
 .page-loading {
@@ -221,27 +242,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  animation: bounce 1s infinite;
 }
 
-.page-loading::after {
-  content: "...";
-  animation: ellipsis 1.5s infinite;
-  width: 1.5em;
-  display: inline-block;
-  text-align: left;
-}
-
-@keyframes ellipsis {
-  0% { content: "."; }
-  33% { content: ".."; }
-  66% { content: "..."; }
-  100% { content: "."; }
-}
-
-@keyframes bounce {
-  0%, 100% { transform: translate(-50%, -45%); }
-  50% { transform: translate(-50%, -55%); }
+.page-error {
+  padding: 20px;
+  text-align: center;
+  color: #dc3545;
+  font-size: 14px;
 }
 
 .current-page {
@@ -408,4 +415,26 @@
   0% { opacity: 1; }
   50% { opacity: 0.6; }
   100% { opacity: 1; }
+}
+
+/* Target text layer from PDF.js */
+.textLayer {
+  position: absolute;
+  text-align: initial;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 0.2;
+  line-height: 1.0;
+}
+
+/* Target annotation layer from PDF.js */
+.annotationLayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
 }
