@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import ChatInterface from './components/ChatInterface';
 import PDFViewer from './components/PDFViewer';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 interface TableOfContentsItem {
   title: string;
@@ -96,7 +97,7 @@ function App() {
           // Add welcome message
           setMessages([{
             role: 'assistant',
-            content: `I've loaded your PDF. You can ask me questions about any page or chapter. Currently showing page ${currentPage}.`
+            content: `I've loaded your PDF. I can answer questions about what you're currently viewing. Navigate to a specific page and ask me questions about its content. Currently showing page ${currentPage}.`
           }]);
         }
       } catch (error) {
@@ -144,41 +145,43 @@ function App() {
   };
 
   return (
-    <div className="app">
-      <div className="sidebar">
-        <div className="file-upload">
-          <input
-            type="file"
-            accept=".pdf"
-            onChange={handleFileChange}
-            className="file-input"
+    <ThemeProvider>
+      <div className="app">
+        <div className="sidebar">
+          <div className="file-upload">
+            <input
+              type="file"
+              accept=".pdf"
+              onChange={handleFileChange}
+              className="file-input"
+            />
+          </div>
+          <div className="table-of-contents">
+            {tableOfContents.map((item, index) => (
+              <TOCItem
+                key={index}
+                item={item}
+                onPageChange={setCurrentPage}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="main-content">
+          <PDFViewer
+            file={file}
+            currentPage={currentPage}
+            onPageChange={setCurrentPage}
           />
         </div>
-        <div className="table-of-contents">
-          {tableOfContents.map((item, index) => (
-            <TOCItem
-              key={index}
-              item={item}
-              onPageChange={setCurrentPage}
-            />
-          ))}
+        <div className="chat-panel">
+          <ChatInterface
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            isLoading={chatIsLoading}
+          />
         </div>
       </div>
-      <div className="main-content">
-        <PDFViewer
-          file={file}
-          currentPage={currentPage}
-          onPageChange={setCurrentPage}
-        />
-      </div>
-      <div className="chat-panel">
-        <ChatInterface
-          messages={messages}
-          onSendMessage={handleSendMessage}
-          isLoading={chatIsLoading}
-        />
-      </div>
-    </div>
+    </ThemeProvider>
   );
 }
 

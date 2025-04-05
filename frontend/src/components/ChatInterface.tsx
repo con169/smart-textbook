@@ -7,15 +7,14 @@ interface Message {
 }
 
 interface ChatInterfaceProps {
-  onSendMessage: (message: string) => Promise<void>;
   messages: Message[];
+  onSendMessage: (message: string) => void;
   isLoading: boolean;
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ onSendMessage, messages, isLoading }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, isLoading }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -25,77 +24,46 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onSendMessage, messages, 
     scrollToBottom();
   }, [messages]);
 
-  const adjustTextareaHeight = () => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
-    }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-    adjustTextareaHeight();
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    await onSendMessage(input);
-    setInput('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = '50px';
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
+    if (input.trim() && !isLoading) {
+      onSendMessage(input.trim());
+      setInput('');
     }
   };
 
   return (
-    <div className="chat-interface">
-      <div className="messages">
+    <>
+      <div className="chat-messages">
         {messages.map((message, index) => (
           <div key={index} className={`message ${message.role}`}>
-            <div className="message-content">
-              <div className="message-icon">
-                {message.role === 'user' ? 'U' : 'A'}
-              </div>
-              <div className="message-text">
-                {message.content}
-              </div>
-            </div>
+            {message.content}
           </div>
         ))}
         {isLoading && (
-          <div className="message assistant">
-            <div className="message-content">
-              <div className="message-icon">A</div>
-              <div className="message-text loading">
-                Thinking
-              </div>
+          <div className="loading-indicator">
+            <div className="loading-dots">
+              <span></span>
+              <span></span>
+              <span></span>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
-      <form className="input-form" onSubmit={handleSubmit}>
-        <textarea
-          ref={textareaRef}
+      <form onSubmit={handleSubmit} className="chat-input">
+        <input
+          type="text"
           value={input}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask a question..."
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Ask about the content on this page..."
           disabled={isLoading}
         />
         <button type="submit" disabled={!input.trim() || isLoading}>
           Send
         </button>
       </form>
-    </div>
+    </>
   );
 };
 
