@@ -91,18 +91,51 @@
   overflow-y: auto;
   background-color: #e0e0e0;
   padding: 2rem;
+  scroll-behavior: smooth;
+  scroll-padding-top: 2rem;
 }
 
 .pdf-document {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 2rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.page-container {
+  width: 100%;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+  position: relative;
+  scroll-margin-top: 2rem;
+}
+
+.page-number {
+  position: absolute;
+  top: -1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #4a90e2;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 1;
 }
 
 .pdf-page {
-  margin-bottom: 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  background-color: white;
+  width: 100% !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+.pdf-page canvas {
+  width: 100% !important;
+  height: auto !important;
 }
 
 .pdf-placeholder {
@@ -178,4 +211,67 @@
   content: 'Loading...';
   color: #666;
   font-size: 1.2rem;
+}
+
+.speed-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 200px;
+}
+
+.speed-control label {
+  font-size: 14px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.speed-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #e0e0e0;
+  outline: none;
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+
+.speed-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #4a90e2;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.speed-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #4a90e2;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.speed-slider:hover::-webkit-slider-thumb {
+  background: #357abd;
+}
+
+.speed-slider:hover::-moz-range-thumb {
+  background: #357abd;
+}
+
+.speed-slider:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.play-button.loading {
+  background-color: #666;
+  cursor: wait;
 } 

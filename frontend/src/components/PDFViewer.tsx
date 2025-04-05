@@ -26,6 +26,16 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [voiceError, setVoiceError] = useState<string>('');
   const [ttsError, setTtsError] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [speed, setSpeed] = useState<number>(1.0);
+
+  // Effect to handle page changes from TOC
+  useEffect(() => {
+    const pageElement = document.querySelector(`.page-container[data-page="${currentPage}"]`);
+    if (pageElement) {
+      pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [currentPage]);
 
   useEffect(() => {
     // Fetch available voices when component mounts
@@ -66,6 +76,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
     try {
         setIsPlaying(true);
         setTtsError('');
+        setIsLoading(true);
         
         const response = await fetch('http://localhost:5000/api/tts/read-pdf', {
             method: 'POST',
@@ -73,8 +84,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                page: currentPage,  // Send actual page number
+                page: currentPage,
                 voice_id: selectedVoice,
+                speed: speed
             }),
         });
 
@@ -92,6 +104,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
         }
 
         const audio = new Audio(audioUrl);
+        audio.playbackRate = speed;
         setAudioElement(audio);
             
         audio.onended = () => {
@@ -110,6 +123,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
         console.error('Error playing audio:', error);
         setTtsError(error instanceof Error ? error.message : 'Failed to generate audio');
         setIsPlaying(false);
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -119,6 +134,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
       setIsPlaying(false);
     }
   };
+
+  // Generate array of page numbers to render
+  const pageNumbers = numPages ? Array.from(new Array(numPages), (_, index) => index + 1) : [];
 
   return (
     <div className="pdf-viewer">
@@ -163,12 +181,27 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
                 )}
               </select>
               
+              <div className="speed-control">
+                <label htmlFor="speed">Speed: {speed}x</label>
+                <input
+                  type="range"
+                  id="speed"
+                  min="0.5"
+                  max="2"
+                  step="0.1"
+                  value={speed}
+                  onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                  disabled={isPlaying}
+                  className="speed-slider"
+                />
+              </div>
+              
               <button
                 onClick={isPlaying ? stopAudio : playPageAudio}
-                disabled={!selectedVoice || voices.length === 0}
-                className={`play-button ${isPlaying ? 'playing' : ''}`}
+                disabled={!selectedVoice || voices.length === 0 || isLoading}
+                className={`play-button ${isPlaying ? 'playing' : ''} ${isLoading ? 'loading' : ''}`}
               >
-                {isPlaying ? 'Stop' : 'Read Page'}
+                {isLoading ? 'Processing...' : isPlaying ? 'Stop' : 'Read Page'}
               </button>
             </>
           )}
@@ -183,12 +216,51 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
             onLoadSuccess={handleDocumentLoadSuccess}
             className="pdf-document"
           >
-            <Page
-              pageNumber={currentPage}
-              className="pdf-page"
-              renderTextLayer={true}
-              renderAnnotationLayer={true}
-            />
+            {pageNumbers.map((pageNumber) => (
+              <div 
+                key={pageNumber} 
+                className="page-container"
+                data-page={pageNumber}
+              >
+                <div className="page-number">Page {pageNumber}</div>
+                <Page
+                  pageNumber={pageNumber}
+                  className="pdf-page"
+                  renderTextLayer={true}
+                  renderAnnotationLayer={true}
+                  onLoadSuccess={() => {
+                    // Update current page based on scroll position
+                    const observer = new IntersectionObserver(
+                      (entries) => {
+                        entries.forEach((entry) => {
+                          if (entry.isIntersecting) {
+                            const page = parseInt(entry.target.getAttribute('data-page') || '1');
+                            if (page !== currentPage) {
+                              onPageChange(page);
+                            }
+                          }
+                        });
+                      },
+                      {
+                        root: null,
+                        threshold: 0.5
+                      }
+                    );
+
+                    const element = document.querySelector(`[data-page="${pageNumber}"]`);
+                    if (element) {
+                      observer.observe(element);
+                    }
+
+                    return () => {
+                      if (element) {
+                        observer.unobserve(element);
+                      }
+                    };
+                  }}
+                />
+              </div>
+            ))}
           </Document>
         ) : (
           <div className="pdf-placeholder">

@@ -88,6 +88,14 @@ def read_pdf_page():
         except Exception as e:
             return jsonify({'error': f'Failed to extract text from PDF: {str(e)}'}), 500
 
+        # Get speed parameter (default to 1.0 if not provided)
+        speed = float(data.get('speed', 1.0))
+        
+        # Adjust text based on speed
+        if speed != 1.0:
+            # Add SSML tags for speed adjustment
+            text = f'<speak><prosody rate="{int((speed-1)*100)}%">{text}</prosody></speak>'
+
         # Request TTS from ElevenLabs
         response = requests.post(
             f'https://api.elevenlabs.io/v1/text-to-speech/{data["voice_id"]}',
