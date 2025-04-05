@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import './App.css';
+import ChatInterface from './components/ChatInterface';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
@@ -9,6 +10,11 @@ interface TableOfContentsItem {
   pageNumber: number;
   level: number;
   children: TableOfContentsItem[];
+}
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 // Add TOC Item component for recursion
@@ -71,7 +77,9 @@ function App() {
   const [loadedPages, setLoadedPages] = useState<Set<number>>(new Set([1]));
   const [renderedPages, setRenderedPages] = useState<Set<number>>(new Set());
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const scrollTimeout = useRef<number>();
+  const scrollTimeout = useRef<number | undefined>(undefined);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [chatIsLoading, setChatIsLoading] = useState(false);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -82,6 +90,13 @@ function App() {
       formData.append('file', selectedFile);
 
       try {
+        // Reset states
+        setMessages([]);
+        setTableOfContents([]);
+        setCurrentPage(1);
+        setLoadedPages(new Set([1]));
+        setRenderedPages(new Set());
+
         const response = await fetch('http://localhost:5000/api/qa/upload', {
           method: 'POST',
           body: formData,
@@ -95,10 +110,20 @@ function App() {
         const tocResponse = await fetch('http://localhost:5000/api/qa/get-toc');
         if (tocResponse.ok) {
           const tocData = await tocResponse.json();
-          setTableOfContents(tocData.toc);
+          setTableOfContents(tocData.toc || []);
+          
+          // Add welcome message
+          setMessages([{
+            role: 'assistant',
+            content: `I've loaded your PDF. You can ask me questions about any page or chapter. Currently showing page ${currentPage}.`
+          }]);
         }
       } catch (error) {
         console.error('Error:', error);
+        setMessages([{
+          role: 'assistant',
+          content: 'Sorry, I encountered an error loading the PDF. Please try again.'
+        }]);
       }
     }
   };
@@ -153,77 +178,67 @@ function App() {
   };
 
   // Load pages more aggressively during scroll
-  const handleScroll = (event?: Event) => {
+  const handleScroll = () => {
     if (!pdfContainerRef.current || !numPages) return;
 
-    const container = pdfContainerRef.current.closest('.main-content');
-    if (!container) return;
+    const mainContent = pdfContainerRef.current.closest('.main-content');
+    if (!mainContent) return;
 
-    const scrollTop = container.scrollTop;
-    const viewportHeight = container.clientHeight;
-    
-    // Get all page containers
+    const containerRect = mainContent.getBoundingClientRect();
+    const containerHeight = containerRect.height;
+    const containerTop = containerRect.top;
+
+    // Find which page is most visible
     const pageContainers = Array.from(pdfContainerRef.current.querySelectorAll('.page-container'));
     
-    // Find the current page based on scroll position
-    let currentPageFound = false;
+    let mostVisiblePage = 1;
+    let maxVisibility = 0;
+
     pageContainers.forEach((container, index) => {
       const rect = container.getBoundingClientRect();
       const pageNumber = index + 1;
       
-      // If this page is in view
-      if (!currentPageFound && rect.top <= viewportHeight/2 && rect.bottom >= viewportHeight/2) {
-        setCurrentPage(pageNumber);
-        currentPageFound = true;
-      }
+      // Calculate how much of the page is visible in the container
+      const visibleTop = Math.max(containerTop, rect.top);
+      const visibleBottom = Math.min(containerTop + containerHeight, rect.bottom);
+      const visibleHeight = Math.max(0, visibleBottom - visibleTop);
       
-      // Load pages within 4 viewport heights above and below
-      if (rect.top <= viewportHeight * 4 && rect.bottom >= -viewportHeight * 4) {
+      if (visibleHeight > maxVisibility) {
+        maxVisibility = visibleHeight;
+        mostVisiblePage = pageNumber;
+      }
+
+      // Load pages within 4 container heights
+      if (rect.top <= containerTop + containerHeight * 4 && 
+          rect.bottom >= containerTop - containerHeight * 4) {
         loadPage(pageNumber);
       }
     });
-  };
 
-  // Debounced scroll handler
-  const debouncedScroll = () => {
-    if (scrollTimeout.current) {
-      window.clearTimeout(scrollTimeout.current);
+    // Only update if we found a visible page and it's different
+    if (maxVisibility > 0 && mostVisiblePage !== currentPage) {
+      setCurrentPage(mostVisiblePage);
     }
-    scrollTimeout.current = window.setTimeout(handleScroll, 100);
   };
 
-  // Scroll listener with both immediate and debounced updates
+  // Optimized scroll listener with requestAnimationFrame
   useEffect(() => {
     if (!pdfContainerRef.current) return;
 
     const mainContent = pdfContainerRef.current.closest('.main-content');
     if (!mainContent) return;
 
-    let ticking = false;
     const scrollListener = () => {
-      // Immediate scroll handler for responsive UI
-      if (!ticking) {
-        requestAnimationFrame(() => {
-          handleScroll();
-          ticking = false;
-        });
-        ticking = true;
-      }
-      // Debounced handler for thorough loading
-      debouncedScroll();
+      requestAnimationFrame(handleScroll);
     };
 
     mainContent.addEventListener('scroll', scrollListener, { passive: true });
-    // Initial load with a dummy scroll event
-    handleScroll(new Event('scroll'));
+    
+    // Initial detection after a short delay to ensure PDF is rendered
+    setTimeout(handleScroll, 100);
 
-    return () => {
-      mainContent.removeEventListener('scroll', scrollListener);
-      if (scrollTimeout.current) {
-        window.clearTimeout(scrollTimeout.current);
-      }
-    };
-  }, [numPages]);
+    return () => mainContent.removeEventListener('scroll', scrollListener);
+  }, [numPages]); // Keep numPages dependency only
 
   // Load more pages when jumping
   const handlePageChange = (pageNumber: number) => {
@@ -253,6 +268,42 @@ function App() {
     setVisiblePages([1]);
   };
 
+  const handleSendMessage = async (message: string) => {
+    setChatIsLoading(true);
+    try {
+      // Add user message to chat
+      setMessages(prev => [...prev, { role: 'user', content: message }]);
+
+      const response = await fetch('http://localhost:5000/api/qa/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          question: message,
+          page: currentPage  // Changed to match the backend's expectation
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      const data = await response.json();
+      
+      // Add assistant message to chat
+      setMessages(prev => [...prev, { role: 'assistant', content: data.answer }]);
+    } catch (error) {
+      // Add error message to chat
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: 'Sorry, I encountered an error processing your request.' 
+      }]);
+    } finally {
+      setChatIsLoading(false);
+    }
+  };
+
   return (
     <div className="app">
       {!file ? (
@@ -271,93 +322,71 @@ function App() {
       ) : (
         <>
           <div className="sidebar">
-            <h1>Table of Contents</h1>
-            <nav className="toc-list">
-              {tableOfContents.map((item, index) => (
-                <TOCItem
-                  key={index}
-                  item={item}
-                  onPageChange={handlePageChange}
-                />
-              ))}
-            </nav>
-          </div>
-          
-          <main className="main-content">
-            <Document
-              file={file}
-              onLoadSuccess={onLoadSuccess}
-              className="pdf-document"
-              loading={
-                <div className="page-loading">
-                  Loading PDF
-                </div>
-              }
-            >
-              {Array.from(new Array(numPages), (_, index) => {
-                const pageNumber = index + 1;
-                return (
-                  <div 
-                    key={`page-container-${pageNumber}`}
-                    className="page-container"
-                    data-page-number={pageNumber}
-                    ref={(el: HTMLDivElement | null) => {
-                      pageRefs.current[index] = el;
-                    }}
-                  >
-                    {loadedPages.has(pageNumber) && (
-                      <Page
-                        key={`page_${pageNumber}`}
-                        pageNumber={pageNumber}
-                        className="pdf-page"
-                        width={Math.min(800, window.innerWidth * 0.45)} // Limit max width
-                        renderTextLayer={true}
-                        renderAnnotationLayer={true}
-                        loading={
-                          <div className="page-loading">
-                            Loading page {pageNumber}...
-                          </div>
-                        }
-                        onRenderSuccess={() => handlePageRenderSuccess(pageNumber)}
-                        error={
-                          <div className="page-error">
-                            Error loading page {pageNumber}. Retrying...
-                          </div>
-                        }
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </Document>
-          </main>
-
-          <div className="questions-panel">
-            <h3 className="questions-header">Ask Questions</h3>
-            <div className="current-page">Current Page: {currentPage}</div>
-            <form onSubmit={handleAskQuestion}>
-              <input
-                type="text"
-                className="question-input"
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Ask about this page..."
-                disabled={isLoading}
+            <h2>Table of Contents</h2>
+            {tableOfContents.map((item, index) => (
+              <TOCItem
+                key={index}
+                item={item}
+                onPageChange={handlePageChange}
               />
-              <button 
-                type="submit" 
-                className="ask-button"
-                disabled={isLoading || !question.trim()}
+            ))}
+          </div>
+          <div className="main-content">
+            <div className="pdf-container" ref={pdfContainerRef}>
+              <Document
+                file={file}
+                onLoadSuccess={onLoadSuccess}
+                className="pdf-document"
+                loading={
+                  <div className="page-loading">
+                    Loading PDF
+                  </div>
+                }
               >
-                {isLoading ? 'Thinking...' : 'Ask'}
-              </button>
-            </form>
-            {answer && (
-              <div className="answer-section">
-                <div className="answer-label">Answer:</div>
-                <div className="answer-content">{answer}</div>
-              </div>
-            )}
+                {Array.from(new Array(numPages), (_, index) => {
+                  const pageNumber = index + 1;
+                  return (
+                    <div 
+                      key={`page-container-${pageNumber}`}
+                      className="page-container"
+                      data-page-number={pageNumber}
+                      ref={(el: HTMLDivElement | null) => {
+                        pageRefs.current[index] = el;
+                      }}
+                    >
+                      {loadedPages.has(pageNumber) && (
+                        <Page
+                          key={`page_${pageNumber}`}
+                          pageNumber={pageNumber}
+                          className="pdf-page"
+                          width={Math.min(800, window.innerWidth * 0.45)} // Limit max width
+                          renderTextLayer={true}
+                          renderAnnotationLayer={true}
+                          loading={
+                            <div className="page-loading">
+                              Loading page {pageNumber}...
+                            </div>
+                          }
+                          onRenderSuccess={() => handlePageRenderSuccess(pageNumber)}
+                          error={
+                            <div className="page-error">
+                              Error loading page {pageNumber}. Retrying...
+                            </div>
+                          }
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </Document>
+            </div>
+          </div>
+          <div className="chat-panel">
+            <ChatInterface
+              onSendMessage={handleSendMessage}
+              messages={messages}
+              isLoading={chatIsLoading}
+            />
           </div>
         </>
       )}

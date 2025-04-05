@@ -25,26 +25,33 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onSendMessage, messages, 
     scrollToBottom();
   }, [messages]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (input.trim() && !isLoading) {
-      const message = input.trim();
-      setInput('');
-      await onSendMessage(message);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
-  };
-
   const adjustTextareaHeight = () => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    adjustTextareaHeight();
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    await onSendMessage(input);
+    setInput('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '50px';
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
     }
   };
 
@@ -52,18 +59,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onSendMessage, messages, 
     <div className="chat-interface">
       <div className="messages">
         {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`message ${message.role}`}
-          >
+          <div key={index} className={`message ${message.role}`}>
             <div className="message-content">
               <div className="message-icon">
-                {message.role === 'assistant' ? '🤖' : '👤'}
+                {message.role === 'user' ? 'U' : 'A'}
               </div>
               <div className="message-text">
-                {message.content.split('\n').map((line, i) => (
-                  <p key={i}>{line}</p>
-                ))}
+                {message.content}
               </div>
             </div>
           </div>
@@ -71,37 +73,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onSendMessage, messages, 
         {isLoading && (
           <div className="message assistant">
             <div className="message-content">
-              <div className="message-icon">🤖</div>
-              <div className="message-text">
-                <p className="loading">Thinking</p>
+              <div className="message-icon">A</div>
+              <div className="message-text loading">
+                Thinking
               </div>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
-      <form onSubmit={handleSubmit} className="input-form">
-        <div className="input-container">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              adjustTextareaHeight();
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask a question..."
-            rows={1}
-            disabled={isLoading}
-          />
-          <button 
-            type="submit" 
-            className="send-button"
-            disabled={isLoading || !input.trim()}
-          >
-            ➤
-          </button>
-        </div>
+      <form className="input-form" onSubmit={handleSubmit}>
+        <textarea
+          ref={textareaRef}
+          value={input}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          placeholder="Ask a question..."
+          disabled={isLoading}
+        />
+        <button type="submit" disabled={!input.trim() || isLoading}>
+          Send
+        </button>
       </form>
     </div>
   );
