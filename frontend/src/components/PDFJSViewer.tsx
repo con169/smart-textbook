@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 import './PDFJSViewer.css';
@@ -12,13 +12,23 @@ interface PDFJSViewerProps {
   onPageChange: (page: number) => void;
 }
 
-const PDFJSViewer: React.FC<PDFJSViewerProps> = ({ file, currentPage, onPageChange }) => {
+interface PageInfo {
+  pageNumber: number;
+  isLoaded: boolean;
+}
+
+export interface PDFJSViewerRef {
+  scrollToPage: (pageNumber: number) => void;
+}
+
+const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, currentPage, onPageChange }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const textLayerRef = useRef<HTMLDivElement>(null);
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState(0);
   const [scale, setScale] = useState(1.5);
+  const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const pagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Load PDF document
   useEffect(() => {
@@ -37,85 +47,183 @@ const PDFJSViewer: React.FC<PDFJSViewerProps> = ({ file, currentPage, onPageChan
     };
   }, [file]);
 
-  // Render page when page number changes
+  // Handle page changes
   useEffect(() => {
-    if (!pdfDoc || !canvasRef.current || !textLayerRef.current) return;
+    if (!pdfDoc || !pagesContainerRef.current) return;
 
-    const renderPage = async (pageNum: number) => {
-      try {
-        const page = await pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale });
-
-        // Set canvas dimensions
-        const canvas = canvasRef.current!;
-        const context = canvas.getContext('2d')!;
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-
-        // Render PDF page into canvas context
-        const renderContext = {
-          canvasContext: context,
-          viewport: viewport,
-        };
-
-        // Clear text layer
-        const textLayer = textLayerRef.current!;
-        textLayer.innerHTML = '';
-        textLayer.style.height = `${viewport.height}px`;
-        textLayer.style.width = `${viewport.width}px`;
-
-        // Render page
-        const renderTask = page.render(renderContext);
-        await renderTask.promise;
-
-        // Get text content
-        const textContent = await page.getTextContent();
-        
-        // Create text layer with proper typing
-        const renderTextLayer = pdfjsLib.renderTextLayer as unknown as (params: {
-          textContent: any;
-          container: HTMLElement;
-          viewport: any;
-          textDivs: HTMLElement[];
-        }) => Promise<void>;
-
-        // Render text layer
-        await renderTextLayer({
-          textContent,
-          container: textLayer,
-          viewport,
-          textDivs: []
-        });
-
-      } catch (error) {
-        console.error('Error rendering page:', error);
+    const pageElement = pageRefs.current.get(currentPage);
+    if (pageElement) {
+      // Ensure the page is rendered
+      if (!pageElement.hasChildNodes()) {
+        renderPage(currentPage, pageElement);
       }
+      
+      // Only scroll the container itself, not the whole viewport
+      if (pageElement.getAttribute('data-needs-scroll') === 'true') {
+        const container = pagesContainerRef.current;
+        const elementTop = pageElement.offsetTop - container.offsetTop;
+        container.scrollTo({
+          top: elementTop,
+          behavior: 'smooth'
+        });
+        pageElement.removeAttribute('data-needs-scroll');
+      }
+    }
+  }, [currentPage, pdfDoc]);
+
+  // Setup intersection observer
+  useEffect(() => {
+    if (!pagesContainerRef.current || !pdfDoc) return;
+
+    const options = {
+      root: pagesContainerRef.current, // Observe intersections within the container
+      rootMargin: '0px',
+      threshold: 0.5
     };
 
-    renderPage(currentPage);
-  }, [pdfDoc, currentPage, scale]);
+    const callback: IntersectionObserverCallback = (entries) => {
+      entries.forEach(entry => {
+        const pageNum = parseInt(entry.target.getAttribute('data-page') || '0');
+        if (entry.isIntersecting) {
+          // Ensure the page is rendered
+          const container = entry.target as HTMLDivElement;
+          if (!container.hasChildNodes()) {
+            renderPage(pageNum, container);
+          }
+        }
+      });
+    };
+
+    observerRef.current = new IntersectionObserver(callback, options);
+
+    pageRefs.current.forEach((element) => {
+      observerRef.current?.observe(element);
+    });
+
+    return () => {
+      observerRef.current?.disconnect();
+    };
+  }, [pdfDoc]);
+
+  // Expose scrollToPage function to parent
+  useImperativeHandle(ref, () => ({
+    scrollToPage: (pageNumber: number) => {
+      const targetPage = Math.max(1, Math.min(pageNumber, numPages));
+      const pageElement = pageRefs.current.get(targetPage);
+      if (pageElement) {
+        // Mark this page as needing to scroll
+        pageElement.setAttribute('data-needs-scroll', 'true');
+        onPageChange(targetPage);
+      }
+    }
+  }));
+
+  // Render page
+  const renderPage = async (pageNum: number, container: HTMLDivElement) => {
+    if (!pdfDoc) return;
+
+    try {
+      const page = await pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale });
+
+      // Create canvas and text layer containers
+      const canvas = document.createElement('canvas');
+      const textLayerDiv = document.createElement('div');
+      
+      canvas.style.width = '100%';
+      canvas.style.height = 'auto';
+      textLayerDiv.className = 'pdfjs-text-layer';
+
+      container.appendChild(canvas);
+      container.appendChild(textLayerDiv);
+
+      // Set canvas dimensions
+      const context = canvas.getContext('2d')!;
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+
+      // Render PDF page into canvas context
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+      };
+
+      // Render page
+      const renderTask = page.render(renderContext);
+      await renderTask.promise;
+
+      // Get text content
+      const textContent = await page.getTextContent();
+      
+      // Create text layer with proper typing
+      const renderTextLayer = pdfjsLib.renderTextLayer as unknown as (params: {
+        textContent: any;
+        container: HTMLElement;
+        viewport: any;
+        textDivs: HTMLElement[];
+      }) => Promise<void>;
+
+      // Render text layer
+      await renderTextLayer({
+        textContent,
+        container: textLayerDiv,
+        viewport,
+        textDivs: []
+      });
+
+    } catch (error) {
+      console.error(`Error rendering page ${pageNum}:`, error);
+    }
+  };
 
   return (
     <div className="pdfjs-container" ref={containerRef}>
-      <div className="pdfjs-page-container" style={{ position: 'relative' }}>
-        <canvas ref={canvasRef} />
-        <div 
-          ref={textLayerRef}
-          className="pdfjs-text-layer"
-          style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
-            overflow: 'hidden',
-            lineHeight: 1.0,
-            userSelect: 'text'
+      <div className="pdfjs-controls">
+        <button 
+          onClick={() => {
+            const prevPage = Math.max(1, currentPage - 1);
+            const pageElement = pageRefs.current.get(prevPage);
+            if (pageElement) {
+              pageElement.setAttribute('data-needs-scroll', 'true');
+              onPageChange(prevPage);
+            }
           }}
-        />
+          disabled={currentPage <= 1}
+        >
+          Previous
+        </button>
+        <span>Page {currentPage} of {numPages}</span>
+        <button 
+          onClick={() => {
+            const nextPage = Math.min(numPages || 1, currentPage + 1);
+            const pageElement = pageRefs.current.get(nextPage);
+            if (pageElement) {
+              pageElement.setAttribute('data-needs-scroll', 'true');
+              onPageChange(nextPage);
+            }
+          }}
+          disabled={currentPage >= (numPages || 1)}
+        >
+          Next
+        </button>
+      </div>
+      <div className="pdfjs-pages" ref={pagesContainerRef}>
+        {Array.from({ length: numPages }, (_, i) => i + 1).map(pageNumber => (
+          <div
+            key={pageNumber}
+            ref={element => {
+              if (element) {
+                pageRefs.current.set(pageNumber, element);
+                observerRef.current?.observe(element);
+              }
+            }}
+            data-page={pageNumber}
+            className="pdfjs-page-container"
+          />
+        ))}
       </div>
     </div>
   );
-};
+});
 
 export default PDFJSViewer; 

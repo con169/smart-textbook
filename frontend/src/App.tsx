@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './App.css';
-import PDFJSViewer from './components/PDFJSViewer';
+import PDFJSViewer, { PDFJSViewerRef } from './components/PDFJSViewer';
 import ChatInterface from './components/ChatInterface';
 import { ThemeProvider } from './contexts/ThemeContext';
 
@@ -23,6 +23,7 @@ function App() {
   const [tableOfContents, setTableOfContents] = useState<TableOfContentsItem[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatIsLoading, setChatIsLoading] = useState(false);
+  const pdfViewerRef = useRef<PDFJSViewerRef>(null);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -104,6 +105,12 @@ function App() {
     }
   };
 
+  const handleTocClick = (page: number) => {
+    if (pdfViewerRef.current) {
+      pdfViewerRef.current.scrollToPage(page);
+    }
+  };
+
   return (
     <ThemeProvider>
       <div className="app">
@@ -121,7 +128,7 @@ function App() {
               <TOCItem
                 key={index}
                 item={item}
-                onPageChange={setCurrentPage}
+                onPageChange={handleTocClick}
               />
             ))}
           </div>
@@ -129,6 +136,7 @@ function App() {
         <div className="main-content">
           {file && (
             <PDFJSViewer
+              ref={pdfViewerRef}
               file={file}
               currentPage={currentPage}
               onPageChange={setCurrentPage}
