@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import './PDFViewer.css';
 
 // Set up the worker for PDF.js
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 interface PDFViewerProps {
   file: File | null;
@@ -15,9 +15,21 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file }) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [scale, setScale] = useState(1.0);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setPdfUrl(url);
+      return () => {
+        URL.revokeObjectURL(url);
+      };
+    }
+  }, [file]);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
+    setPageNumber(1); // Reset to first page when loading new document
   };
 
   const changePage = (offset: number) => {
@@ -45,7 +57,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file }) => {
             Previous
           </button>
           <span>
-            Page {pageNumber} of {numPages}
+            Page {pageNumber} of {numPages || '?'}
           </span>
           <button onClick={nextPage} disabled={pageNumber >= (numPages || 1)}>
             Next
@@ -58,17 +70,20 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file }) => {
         </div>
       </div>
       <div className="pdf-container">
-        <Document
-          file={file}
-          onLoadSuccess={onDocumentLoadSuccess}
-          loading={<div className="pdf-loading">Loading PDF...</div>}
-        >
-          <Page
-            pageNumber={pageNumber}
-            scale={scale}
-            loading={<div className="pdf-loading">Loading page...</div>}
-          />
-        </Document>
+        {pdfUrl && (
+          <Document
+            file={pdfUrl}
+            onLoadSuccess={onDocumentLoadSuccess}
+            loading={<div className="pdf-loading">Loading PDF...</div>}
+            error={<div className="pdf-error">Error loading PDF. Please try again.</div>}
+          >
+            <Page
+              pageNumber={pageNumber}
+              scale={scale}
+              loading={<div className="pdf-loading">Loading page...</div>}
+            />
+          </Document>
+        )}
       </div>
     </div>
   );

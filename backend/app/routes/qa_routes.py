@@ -52,79 +52,40 @@ def chunk_text(text: str, max_tokens: int = 2000) -> list:
 
 @bp.route('/ask', methods=['POST'])
 def ask_question():
-    data = request.json
-    if not data or 'question' not in data:
-        return jsonify({'error': 'Missing question'}), 400
-    
-    question = data['question']
-    filename = data.get('filename')
-    
-    print(f"\n=== New Question Request ===")
-    print(f"Timestamp: {datetime.now().isoformat()}")
-    print(f"Question: {question}")
-    print(f"Filename: {filename}")
-    
     try:
-        # Get PDF content if filename is provided
-        content = ""
-        if filename:
-            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-            if os.path.exists(file_path):
-                try:
-                    # Read PDF content using PyPDF2
-                    reader = PdfReader(file_path)
-                    content = ""
-                    for page in reader.pages:
-                        content += page.extract_text() + "\n"
-                    print(f"Successfully extracted text from {filename}")
-                except Exception as pdf_error:
-                    print(f"Error extracting PDF text: {str(pdf_error)}")
-                    return jsonify({'error': f'Error reading PDF: {str(pdf_error)}'}), 500
-            else:
-                print(f"Warning: File {filename} not found")
+        data = request.get_json()
+        if not data or 'question' not in data:
+            return jsonify({'error': 'No question provided'}), 400
+
+        question = data['question']
+        page_number = data.get('page', 1)
         
-        # Create a new client for this request
-        client = get_openai_client()
-        
-        # Prepare messages with content context if available
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant. Answer questions based on the provided content."}
-        ]
-        
-        if content:
-            # Split content into chunks if it's too long
-            chunks = chunk_text(content)
-            context_message = f"Here is the content to answer questions from:\n\n{chunks[0]}"
-            messages.append({"role": "user", "content": context_message})
-            messages.append({"role": "assistant", "content": "I understand the content. What would you like to know?"})
-        
-        messages.append({"role": "user", "content": question})
-        
-        print("Making API call to OpenAI...")
-        response = client.chat.completions.create(
+        filename = os.path.join(current_app.config['UPLOAD_FOLDER'], 'current.pdf')
+        if not os.path.exists(filename):
+            return jsonify({'error': 'No PDF file uploaded'}), 404
+
+        reader = PdfReader(filename)
+        if page_number < 1 or page_number > len(reader.pages):
+            return jsonify({'error': 'Invalid page number'}), 400
+
+        # Extract text from the specified page
+        page = reader.pages[page_number - 1]
+        text = page.extract_text()
+
+        # Get response from OpenAI
+        response = get_openai_client().chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=messages,
-            max_tokens=500  # Increased for more detailed responses
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that answers questions about the content of a book. Base your answers only on the provided text."},
+                {"role": "user", "content": f"Here is the text from page {page_number}:\n\n{text}\n\nQuestion: {question}"}
+            ],
+            max_tokens=500
         )
-        print("API call successful!")
-        
-        answer = response.choices[0].message.content
-        print(f"Response received: {answer}")
-        
-        return jsonify({
-            'answer': answer,
-            'context_used': bool(content)
-        }), 200
-            
-    except RateLimitError as e:
-        print(f"Rate limit error: {str(e)}")
-        return jsonify({
-            'error': 'Rate limit exceeded. Please try again later.',
-            'details': str(e)
-        }), 429
+
+        return jsonify({'answer': response.choices[0].message.content}), 200
+
     except Exception as e:
-        print(f"Unexpected error: {str(e)}")
-        return jsonify({'error': f'Error processing question: {str(e)}'}), 500
+        return jsonify({'error': str(e)}), 500
 
 @bp.route('/history/<filename>', methods=['GET'])
 def get_qa_history(filename):
@@ -179,4 +140,85 @@ def list_models():
         available_models = [model.id for model in models.data]
         return jsonify({'models': available_models}), 200
     except Exception as e:
-        return jsonify({'error': f'Error listing models: {str(e)}'}), 500 
+        return jsonify({'error': f'Error listing models: {str(e)}'}), 500
+
+@bp.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    if file and file.filename.endswith('.pdf'):
+        filename = os.path.join(current_app.config['UPLOAD_FOLDER'], 'current.pdf')
+        file.save(filename)
+        return jsonify({'message': 'File uploaded successfully'}), 200
+    
+    return jsonify({'error': 'Invalid file type'}), 400
+
+@bp.route('/get-toc', methods=['GET'])
+def get_table_of_contents():
+    try:
+        filename = os.path.join(current_app.config['UPLOAD_FOLDER'], 'current.pdf')
+        if not os.path.exists(filename):
+            return jsonify({'error': 'No PDF file uploaded'}), 404
+
+        reader = PdfReader(filename)
+        toc = []
+        
+        # Try to get the table of contents from PDF metadata
+        if hasattr(reader, 'outline') and reader.outline:
+            def extract_bookmarks(bookmarks, level=0):
+                items = []
+                for bookmark in bookmarks:
+                    if isinstance(bookmark, dict):
+                        if '/Title' in bookmark and '/Page' in bookmark:
+                            items.append({
+                                'title': bookmark['/Title'],
+                                'pageNumber': reader.get_destination_page_number(bookmark) + 1
+                            })
+                        if '/First' in bookmark:
+                            items.extend(extract_bookmarks(bookmark['/First'], level + 1))
+                    elif isinstance(bookmark, list):
+                        items.extend(extract_bookmarks(bookmark, level))
+                return items
+
+            toc = extract_bookmarks(reader.outline)
+
+        # If no TOC in metadata, try to extract from content
+        if not toc:
+            # Use OpenAI to analyze the first page for potential TOC
+            first_page = reader.pages[0]
+            text = first_page.extract_text()
+            
+            response = get_openai_client().chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that extracts table of contents information from text. Return the information in a consistent format with page numbers."},
+                    {"role": "user", "content": f"Extract the table of contents from this text, if present:\n\n{text}"}
+                ],
+                max_tokens=500
+            )
+            
+            # Process the AI response to extract TOC items
+            ai_response = response.choices[0].message.content
+            # Simple parsing of AI response - you might want to make this more robust
+            lines = ai_response.split('\n')
+            for line in lines:
+                if line.strip():
+                    # Look for patterns like "Chapter 1: Introduction....... 5"
+                    parts = line.split('.')
+                    if len(parts) >= 2 and parts[-1].strip().isdigit():
+                        title = '.'.join(parts[:-1]).strip()
+                        page_num = int(parts[-1].strip())
+                        toc.append({
+                            'title': title,
+                            'pageNumber': page_num
+                        })
+
+        return jsonify({'toc': toc}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500 

@@ -1,158 +1,159 @@
-import { useState } from 'react'
-import './App.css'
-import ChatInterface from './components/ChatInterface'
-import PDFViewer from './components/PDFViewer'
+import React, { useState, useEffect } from 'react';
+import { Document, Page, pdfjs } from 'react-pdf';
+import './App.css';
 
-interface Message {
-  role: 'user' | 'assistant'
-  content: string
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+
+interface TableOfContentsItem {
+  title: string;
+  pageNumber: number;
 }
 
 function App() {
-  const [file, setFile] = useState<File | null>(null)
-  const [uniqueFilename, setUniqueFilename] = useState<string>('')
-  const [messages, setMessages] = useState<Message[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [uploadStatus, setUploadStatus] = useState<{
-    isUploading: boolean;
-    success?: boolean;
-    message?: string;
-  }>({ isUploading: false });
+  const [file, setFile] = useState<File | null>(null);
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [tableOfContents, setTableOfContents] = useState<TableOfContentsItem[]>([]);
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0]
-    console.log('File selected:', selectedFile)
-    
+    const selectedFile = event.target.files?.[0];
     if (selectedFile && selectedFile.type === 'application/pdf') {
-      console.log('Valid PDF file detected')
-      setFile(selectedFile)
-      setUploadStatus({ isUploading: true, message: 'Uploading PDF...' })
+      setFile(selectedFile);
       
-      // Create FormData and send to backend
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-      console.log('FormData created with file:', selectedFile.name)
+      const formData = new FormData();
+      formData.append('file', selectedFile);
 
       try {
-        console.log('Sending request to backend...')
-        const response = await fetch('http://localhost:5000/api/pdf/upload', {
+        const response = await fetch('http://localhost:5000/api/qa/upload', {
           method: 'POST',
           body: formData,
-        })
+        });
 
-        console.log('Response received:', response.status)
         if (!response.ok) {
-          throw new Error('Upload failed')
+          throw new Error('Failed to upload file');
         }
 
-        const data = await response.json()
-        console.log('Upload successful:', data)
-        setUniqueFilename(data.filename)
-        setUploadStatus({ 
-          isUploading: false, 
-          success: true, 
-          message: `${selectedFile.name} uploaded successfully! You can now ask questions about it.` 
-        })
-        
-        // Add a welcome message
-        setMessages([{ 
-          role: 'assistant', 
-          content: 'I\'ve processed your PDF. What would you like to know about it?' 
-        }])
+        // Get table of contents from the backend
+        const tocResponse = await fetch('http://localhost:5000/api/qa/get-toc');
+        if (tocResponse.ok) {
+          const tocData = await tocResponse.json();
+          setTableOfContents(tocData.toc);
+        }
       } catch (error) {
-        console.error('Error uploading file:', error)
-        setUploadStatus({ 
-          isUploading: false, 
-          success: false, 
-          message: 'Failed to upload file. Please try again.' 
-        })
+        console.error('Error:', error);
       }
-    } else if (selectedFile) {
-      console.log('Invalid file type:', selectedFile.type)
-      setUploadStatus({ 
-        isUploading: false, 
-        success: false, 
-        message: 'Please select a PDF file.' 
-      })
     }
-  }
+  };
 
-  const handleSendMessage = async (question: string) => {
-    if (!file || !uniqueFilename) {
-      alert('Please upload a PDF first')
-      return
-    }
+  const handleAskQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!question.trim() || isLoading) return;
 
-    setIsLoading(true)
-    setMessages(prev => [...prev, { role: 'user', content: question }])
-
+    setIsLoading(true);
     try {
       const response = await fetch('http://localhost:5000/api/qa/ask', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          question,
-          filename: uniqueFilename,
-        }),
-      })
+        body: JSON.stringify({ question, page: currentPage }),
+      });
 
       if (!response.ok) {
-        throw new Error('Failed to get answer')
+        throw new Error('Failed to get response');
       }
 
-      const data = await response.json()
-      setMessages(prev => [...prev, { role: 'assistant', content: data.answer }])
+      const data = await response.json();
+      setAnswer(data.answer);
     } catch (error) {
-      console.error('Error getting answer:', error)
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error processing your question.' }])
+      setAnswer('Sorry, I encountered an error processing your request.');
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>Smart Textbook</h1>
-        <div className="file-upload">
+      {!file ? (
+        <div className="upload-overlay">
           <input
             type="file"
-            accept=".pdf"
             onChange={handleFileChange}
-            id="file-input"
-            style={{ display: 'none' }}
-            disabled={uploadStatus.isUploading}
+            accept=".pdf"
+            id="file-upload"
+            className="file-input"
           />
-          <label 
-            htmlFor="file-input" 
-            className={`upload-button ${uploadStatus.isUploading ? 'uploading' : ''}`}
-          >
-            {uploadStatus.isUploading ? 'Uploading...' : file ? 'Change PDF' : 'Upload PDF'}
+          <label htmlFor="file-upload" className="upload-button">
+            Upload PDF Book
           </label>
-          {file && <span className="filename">{file.name}</span>}
         </div>
-      </header>
-      {uploadStatus.message && (
-        <div className={`upload-status ${uploadStatus.success ? 'success' : 'error'}`}>
-          {uploadStatus.message}
-        </div>
+      ) : (
+        <>
+          <div className="sidebar">
+            <h1>Table of Contents</h1>
+            <nav className="toc-list">
+              {tableOfContents.map((item, index) => (
+                <div
+                  key={index}
+                  className="toc-item"
+                  onClick={() => setCurrentPage(item.pageNumber)}
+                >
+                  {item.title}
+                </div>
+              ))}
+            </nav>
+          </div>
+          
+          <main className="main-content">
+            <Document
+              file={file}
+              onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+              className="pdf-document"
+            >
+              {Array.from(new Array(numPages), (_, index) => (
+                <Page
+                  key={`page_${index + 1}`}
+                  pageNumber={index + 1}
+                  className="pdf-page"
+                  width={window.innerWidth * 0.5}
+                />
+              ))}
+            </Document>
+          </main>
+
+          <div className="questions-panel">
+            <h3 className="questions-header">Ask Questions</h3>
+            <form onSubmit={handleAskQuestion}>
+              <input
+                type="text"
+                className="question-input"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="Ask about this page..."
+                disabled={isLoading}
+              />
+              <button 
+                type="submit" 
+                className="ask-button"
+                disabled={isLoading || !question.trim()}
+              >
+                {isLoading ? 'Thinking...' : 'Ask'}
+              </button>
+            </form>
+            {answer && (
+              <div className="answer-section">
+                <div className="answer-label">Answer:</div>
+                <div className="answer-content">{answer}</div>
+              </div>
+            )}
+          </div>
+        </>
       )}
-      <main className="app-main">
-        <div className="pdf-section">
-          <PDFViewer file={file} />
-        </div>
-        <div className="chat-section">
-          <ChatInterface
-            onSendMessage={handleSendMessage}
-            messages={messages}
-            isLoading={isLoading}
-          />
-        </div>
-      </main>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

@@ -54,40 +54,54 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onSendMessage, messages, 
         {messages.map((message, index) => (
           <div
             key={index}
-            className={`message ${message.role === 'assistant' ? 'assistant' : 'user'}`}
+            className={`message ${message.role}`}
           >
             <div className="message-content">
-              {message.content.split('\n').map((line, i) => (
-                <p key={i}>{line}</p>
-              ))}
+              <div className="message-icon">
+                {message.role === 'assistant' ? '🤖' : '👤'}
+              </div>
+              <div className="message-text">
+                {message.content.split('\n').map((line, i) => (
+                  <p key={i}>{line}</p>
+                ))}
+              </div>
             </div>
           </div>
         ))}
         {isLoading && (
           <div className="message assistant">
             <div className="message-content">
-              <p className="loading">Thinking...</p>
+              <div className="message-icon">🤖</div>
+              <div className="message-text">
+                <p className="loading">Thinking</p>
+              </div>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
       <form onSubmit={handleSubmit} className="input-form">
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => {
-            setInput(e.target.value);
-            adjustTextareaHeight();
-          }}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask a question..."
-          rows={1}
-          disabled={isLoading}
-        />
-        <button type="submit" disabled={isLoading || !input.trim()}>
-          Send
-        </button>
+        <div className="input-container">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              adjustTextareaHeight();
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask a question..."
+            rows={1}
+            disabled={isLoading}
+          />
+          <button 
+            type="submit" 
+            className="send-button"
+            disabled={isLoading || !input.trim()}
+          >
+            ➤
+          </button>
+        </div>
       </form>
     </div>
   );
