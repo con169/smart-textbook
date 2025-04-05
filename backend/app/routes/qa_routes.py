@@ -1,24 +1,30 @@
 from flask import Blueprint, request, jsonify, current_app
 import os
 import json
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 import tiktoken
 from datetime import datetime
+from PyPDF2 import PdfReader
 
 bp = Blueprint('qa', __name__, url_prefix='/api/qa')
 
-# Initialize OpenAI client
-client = OpenAI(
-    api_key=os.getenv('OPENAI_API_KEY'),
-    # Remove any custom configuration that might cause issues
-)
+def get_openai_client():
+    """Create a new OpenAI client instance"""
+    api_key = os.getenv('OPENAI_API_KEY')
+    # Print masked version of API key for debugging
+    if api_key:
+        masked_key = f"{api_key[:8]}...{api_key[-4:]}"
+        print(f"Using API key: {masked_key}")
+    else:
+        print("Warning: No API key found!")
+    return OpenAI(api_key=api_key)
 
 def count_tokens(text: str) -> int:
     """Count tokens in text using tiktoken"""
-    encoding = tiktoken.encoding_for_model("gpt-4")
+    encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
     return len(encoding.encode(text))
 
-def chunk_text(text: str, max_tokens: int = 6000) -> list:
+def chunk_text(text: str, max_tokens: int = 2000) -> list:
     """Split text into chunks that fit within token limits"""
     chunks = []
     current_chunk = ""
@@ -47,87 +53,77 @@ def chunk_text(text: str, max_tokens: int = 6000) -> list:
 @bp.route('/ask', methods=['POST'])
 def ask_question():
     data = request.json
-    if not data or 'question' not in data or 'filename' not in data:
-        return jsonify({'error': 'Missing question or filename'}), 400
+    if not data or 'question' not in data:
+        return jsonify({'error': 'Missing question'}), 400
     
     question = data['question']
-    filename = data['filename']
+    filename = data.get('filename')
     
-    # Get the content file path
-    content_path = os.path.join(current_app.config['UPLOAD_FOLDER'], f"{filename}_content.txt")
-    if not os.path.exists(content_path):
-        return jsonify({'error': 'PDF content not found'}), 404
+    print(f"\n=== New Question Request ===")
+    print(f"Timestamp: {datetime.now().isoformat()}")
+    print(f"Question: {question}")
+    print(f"Filename: {filename}")
     
     try:
-        # Read the content
-        with open(content_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        # Get PDF content if filename is provided
+        content = ""
+        if filename:
+            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+            if os.path.exists(file_path):
+                try:
+                    # Read PDF content using PyPDF2
+                    reader = PdfReader(file_path)
+                    content = ""
+                    for page in reader.pages:
+                        content += page.extract_text() + "\n"
+                    print(f"Successfully extracted text from {filename}")
+                except Exception as pdf_error:
+                    print(f"Error extracting PDF text: {str(pdf_error)}")
+                    return jsonify({'error': f'Error reading PDF: {str(pdf_error)}'}), 500
+            else:
+                print(f"Warning: File {filename} not found")
         
-        # Split content into chunks if it's too long
-        chunks = chunk_text(content)
+        # Create a new client for this request
+        client = get_openai_client()
         
-        # Initialize response storage
-        relevant_content = []
+        # Prepare messages with content context if available
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant. Answer questions based on the provided content."}
+        ]
         
-        # For each chunk, ask OpenAI to determine relevance to the question
-        for chunk in chunks:
-            relevance_messages = [
-                {"role": "system", "content": "You are a helpful assistant that determines if text content is relevant to answering a question. Respond with only 'yes' or 'no'."},
-                {"role": "user", "content": f"Question: {question}\n\nIs the following content relevant to answering this question?\n\nContent: {chunk}"}
-            ]
-            
-            relevance_response = client.chat.completions.create(
-                model="gpt-4",
-                messages=relevance_messages,
-                temperature=0,
-                max_tokens=10
-            )
-            
-            if 'yes' in relevance_response.choices[0].message.content.lower():
-                relevant_content.append(chunk)
+        if content:
+            # Split content into chunks if it's too long
+            chunks = chunk_text(content)
+            context_message = f"Here is the content to answer questions from:\n\n{chunks[0]}"
+            messages.append({"role": "user", "content": context_message})
+            messages.append({"role": "assistant", "content": "I understand the content. What would you like to know?"})
         
-        # If we found relevant content, use it to answer the question
-        if relevant_content:
-            context = "\n\n".join(relevant_content)
+        messages.append({"role": "user", "content": question})
+        
+        print("Making API call to OpenAI...")
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            max_tokens=500  # Increased for more detailed responses
+        )
+        print("API call successful!")
+        
+        answer = response.choices[0].message.content
+        print(f"Response received: {answer}")
+        
+        return jsonify({
+            'answer': answer,
+            'context_used': bool(content)
+        }), 200
             
-            messages = [
-                {"role": "system", "content": """You are a helpful teaching assistant that answers questions about textbook content.
-                Provide clear, accurate answers based on the content provided. If the answer cannot be fully determined from the content,
-                acknowledge this and provide the best possible answer based on what is available. Use markdown formatting for better readability."""},
-                {"role": "user", "content": f"Using the following textbook content, please answer this question: {question}\n\nContent: {context}"}
-            ]
-            
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=messages,
-                temperature=0.7,
-                max_tokens=1000
-            )
-            
-            return jsonify({
-                'answer': response.choices[0].message.content,
-                'context_used': True
-            }), 200
-        else:
-            # If no relevant content found, provide a fallback response
-            messages = [
-                {"role": "system", "content": "You are a helpful teaching assistant. The user has asked a question about content that isn't available in the provided text. Explain this politely and suggest how they might rephrase their question."},
-                {"role": "user", "content": f"The user asked: {question}"}
-            ]
-            
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=messages,
-                temperature=0.7,
-                max_tokens=200
-            )
-            
-            return jsonify({
-                'answer': response.choices[0].message.content,
-                'context_used': False
-            }), 200
-            
+    except RateLimitError as e:
+        print(f"Rate limit error: {str(e)}")
+        return jsonify({
+            'error': 'Rate limit exceeded. Please try again later.',
+            'details': str(e)
+        }), 429
     except Exception as e:
+        print(f"Unexpected error: {str(e)}")
         return jsonify({'error': f'Error processing question: {str(e)}'}), 500
 
 @bp.route('/history/<filename>', methods=['GET'])
@@ -171,4 +167,16 @@ def save_interaction():
     with open(history_path, 'w') as f:
         json.dump(history, f)
         
-    return jsonify({'message': 'Interaction saved successfully'}), 200 
+    return jsonify({'message': 'Interaction saved successfully'}), 200
+
+@bp.route('/models', methods=['GET'])
+def list_models():
+    """List available OpenAI models"""
+    try:
+        # Create a new client for this request
+        client = get_openai_client()
+        models = client.models.list()
+        available_models = [model.id for model in models.data]
+        return jsonify({'models': available_models}), 200
+    except Exception as e:
+        return jsonify({'error': f'Error listing models: {str(e)}'}), 500 

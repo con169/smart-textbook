@@ -40,3 +40,113 @@
 .read-the-docs {
   color: #888;
 }
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #ffffff;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e5e5e5;
+  height: 64px;
+}
+
+.app-header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.file-upload {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.upload-button {
+  padding: 0.5rem 1rem;
+  background-color: #007AFF;
+  color: white;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.upload-button:hover {
+  background-color: #0056b3;
+}
+
+.upload-button.uploading {
+  background-color: #ccc;
+  cursor: not-allowed;
+  animation: pulse 2s infinite;
+}
+
+.filename {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.upload-status {
+  padding: 1rem 2rem;
+  text-align: center;
+  font-size: 0.9rem;
+  animation: slideDown 0.3s ease-out;
+}
+
+.upload-status.success {
+  background-color: #e3f7e9;
+  color: #0a5d1d;
+  border-bottom: 1px solid #a7e9bc;
+}
+
+.upload-status.error {
+  background-color: #fee7e7;
+  color: #b91c1c;
+  border-bottom: 1px solid #fecaca;
+}
+
+.app-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.pdf-section {
+  flex: 1;
+  min-width: 0;
+  border-right: 1px solid #e5e5e5;
+}
+
+.chat-section {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
