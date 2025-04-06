@@ -157,4 +157,45 @@
 .error-message {
   color: var(--error-color);
   font-size: 0.9rem;
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 1rem;
+  padding: 0.25rem;
+  border-radius: 0.5rem;
+  background-color: var(--background-secondary);
+}
+
+.zoom-controls button {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background-color: var(--background-primary);
+  color: var(--text-color);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 1.25rem;
+  padding: 0;
+}
+
+.zoom-controls button:hover:not(:disabled) {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.zoom-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.zoom-controls span {
+  min-width: 4rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 } 

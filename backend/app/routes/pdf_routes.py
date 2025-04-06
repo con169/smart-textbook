@@ -41,17 +41,39 @@ def upload_pdf():
             if hasattr(reader, 'outline') and reader.outline:
                 def extract_bookmarks(bookmarks, level=0):
                     items = []
-                    for item in bookmarks:
-                        if isinstance(item, dict):
-                            page_num = reader.get_destination_page_number(item)
-                            items.append({
-                                'title': item.get('/Title', 'Untitled'),
+                    for bookmark in bookmarks:
+                        if isinstance(bookmark, dict):
+                            page_num = reader.get_destination_page_number(bookmark)
+                            item = {
+                                'title': bookmark.get('/Title', 'Untitled'),
                                 'pageNumber': page_num + 1,
                                 'level': level,
                                 'children': []
-                            })
-                        elif isinstance(item, list):
-                            items.extend(extract_bookmarks(item, level + 1))
+                            }
+                            
+                            # Handle nested bookmarks
+                            if '/First' in bookmark:
+                                # Get all children
+                                current_child = bookmark['/First']
+                                while current_child:
+                                    child_items = extract_bookmarks([current_child], level + 1)
+                                    if child_items:
+                                        item['children'].extend(child_items)
+                                    if '/Next' in current_child:
+                                        current_child = current_child['/Next']
+                                    else:
+                                        break
+                            
+                            items.append(item)
+                            
+                            # Process next sibling if it exists
+                            if '/Next' in bookmark:
+                                next_items = extract_bookmarks([bookmark['/Next']], level)
+                                items.extend(next_items)
+                                
+                        elif isinstance(bookmark, list):
+                            items.extend(extract_bookmarks(bookmark, level))
+                    
                     return items
                 
                 toc = extract_bookmarks(reader.outline)

@@ -31,7 +31,7 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
   const containerRef = useRef<HTMLDivElement>(null);
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState(0);
-  const [scale, setScale] = useState(1.5);
+  const [scale, setScale] = useState(2.0);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const observerRef = useRef<IntersectionObserver | null>(null);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
@@ -137,6 +137,23 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
           console.log('Page not rendered, rendering now');
           renderPage(targetPage, pageElement);
         }
+
+        // Calculate scroll position taking scale into account
+        if (pagesContainerRef.current) {
+          const container = pagesContainerRef.current;
+          const elementTop = pageElement.offsetTop;
+          const containerTop = container.offsetTop;
+          const scrollPosition = elementTop - containerTop;
+
+          // Add a small delay to ensure the page is rendered with the current scale
+          setTimeout(() => {
+            container.scrollTo({
+              top: scrollPosition,
+              behavior: 'smooth'
+            });
+          }, 100);
+        }
+
         // Update the page number
         onPageChange(targetPage);
       } else {
@@ -322,6 +339,47 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
     }
   };
 
+  // Zoom control functions
+  const zoomIn = () => {
+    setScale(prevScale => {
+      const newScale = prevScale + 0.25;
+      // Remove hard limit of 3.0, let it go up to 5.0 for better flexibility
+      return Math.min(newScale, 5.0);
+    });
+    // Clear and re-render all pages
+    pageRefs.current.forEach((container) => {
+      container.innerHTML = '';
+    });
+    if (pdfDoc) {
+      pdfDoc.getPage(1).then(page => {
+        const viewport = page.getViewport({ scale: scale + 0.25 });
+        pageRefs.current.forEach(container => {
+          container.style.width = `${viewport.width}px`;
+        });
+      });
+    }
+  };
+
+  const zoomOut = () => {
+    setScale(prevScale => {
+      const newScale = prevScale - 0.25;
+      // Keep minimum at 0.5 to prevent pages from becoming too small
+      return Math.max(newScale, 0.5);
+    });
+    // Clear and re-render all pages
+    pageRefs.current.forEach((container) => {
+      container.innerHTML = '';
+    });
+    if (pdfDoc) {
+      pdfDoc.getPage(1).then(page => {
+        const viewport = page.getViewport({ scale: scale - 0.25 });
+        pageRefs.current.forEach(container => {
+          container.style.width = `${viewport.width}px`;
+        });
+      });
+    }
+  };
+
   return (
     <div className="pdfjs-container" ref={containerRef}>
       <div className="pdfjs-controls">
@@ -402,6 +460,11 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
             </>
           )}
           {ttsError && <span className="error-message">{ttsError}</span>}
+        </div>
+        <div className="zoom-controls">
+          <button onClick={zoomOut} disabled={scale <= 0.5}>-</button>
+          <span>{Math.round(scale * 100)}%</span>
+          <button onClick={zoomIn} disabled={scale >= 5.0}>+</button>
         </div>
       </div>
       <div className="pdfjs-pages" ref={pagesContainerRef}>

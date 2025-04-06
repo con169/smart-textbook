@@ -6,7 +6,8 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 
 interface TableOfContentsItem {
   title: string;
-  page: number;
+  page?: number;
+  pageNumber?: number;
   level: number;
   children?: TableOfContentsItem[];
 }
@@ -83,7 +84,8 @@ const AppContent = () => {
         setTableOfContents([]);
         setCurrentPage(1);
 
-        const response = await fetch('http://localhost:8000/api/qa/upload', {
+        // Use the PDF routes endpoint instead of QA routes
+        const response = await fetch('http://localhost:8000/api/pdf/upload', {
           method: 'POST',
           body: formData,
         });
@@ -100,7 +102,8 @@ const AppContent = () => {
           const validatedTOC = data.toc.map((item: any) => ({
             ...item,
             page: item.pageNumber || 1,
-            pageNumber: undefined
+            level: item.level || 0,
+            children: item.children || []
           }));
           console.log('Setting TOC:', validatedTOC);  // Debug log
           setTableOfContents(validatedTOC);
@@ -224,7 +227,7 @@ const TOCItem: React.FC<TOCItemProps> = ({ item, onPageChange }) => {
 
   const handleClick = () => {
     console.log('TOC item clicked:', item);
-    const pageNum = item.page;
+    const pageNum = item.page || item.pageNumber;
     if (typeof pageNum === 'number' && !isNaN(pageNum)) {
       console.log('Calling onPageChange with page:', pageNum);
       onPageChange(pageNum);
@@ -233,31 +236,44 @@ const TOCItem: React.FC<TOCItemProps> = ({ item, onPageChange }) => {
     }
   };
 
+  // Determine if this is a "Notes" or "References" section
+  const isSubsection = item.title.toLowerCase().endsWith('notes.') || 
+                      item.title.toLowerCase().endsWith('references.');
+  const effectiveLevel = isSubsection ? (item.level || 0) + 1 : item.level || 0;
+
   return (
-    <div className={`toc-item level-${item.level}`}>
+    <div className={`toc-item level-${effectiveLevel}`}>
       <div className="toc-item-header">
         {hasChildren && (
           <button
             className="expand-button"
-            onClick={() => setIsExpanded(!isExpanded)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
+            aria-label={isExpanded ? 'Collapse section' : 'Expand section'}
           >
-            {isExpanded ? '▼' : '▶'}
+            {isExpanded ? '▾' : '▸'}
           </button>
         )}
-        <span
+        <div
           className="toc-item-title"
           onClick={handleClick}
-          title={`Go to page ${item.page}`}
+          title={`Go to page ${item.page || item.pageNumber}`}
         >
-          {item.title} (Page {item.page})
-        </span>
+          <span className="title-text">{item.title}</span>
+          <span className="page-number">{item.page || item.pageNumber}</span>
+        </div>
       </div>
       {hasChildren && isExpanded && (
         <div className="toc-children">
           {item.children!.map((child, index) => (
             <TOCItem
-              key={index}
-              item={child}
+              key={`${child.title}-${index}`}
+              item={{
+                ...child,
+                level: effectiveLevel + 1
+              }}
               onPageChange={onPageChange}
             />
           ))}
