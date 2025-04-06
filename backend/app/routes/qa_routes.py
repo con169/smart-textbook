@@ -122,11 +122,11 @@ def ask_question():
 
         # Process each chunk with OpenAI
         for i, chunk in enumerate(chunks):
-            print(f"Processing chunk {i + 1} of {len(chunks)}")
+            print(f"Processing chunk {i + 1}")
             response = get_openai_client().chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that answers questions about the content of a book. Base your answers only on the provided text. If you cannot find relevant information in the text, say so clearly. If asked about a chapter, try to provide a comprehensive summary of the chapter's content."},
+                    {"role": "system", "content": "You are a helpful assistant that answers questions about the content of a book. Your responses should be clear and well-structured. For summaries:\n- Use bullet points for key points\n- Keep paragraphs short and focused\n- Use sections with headers when appropriate\n- Highlight important concepts\n- Keep responses concise yet informative\nBase your answers only on the provided text. If you cannot find relevant information in the text, say so clearly."},
                     {"role": "user", "content": f"Here is the {context}:\n\n{chunk}\n\nQuestion: {question}"}
                 ],
                 max_tokens=500

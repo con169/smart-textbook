@@ -48,18 +48,39 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
   useEffect(() => {
     if (!file) return;
 
+    // Clean up existing PDF and rendered pages
+    if (pdfDoc) {
+      pdfDoc.destroy();
+      setPdfDoc(null);
+      setNumPages(0);
+      // Clear all rendered pages
+      pageRefs.current.forEach((container) => {
+        container.innerHTML = '';
+      });
+    }
+
     const loadingTask = pdfjsLib.getDocument(file);
     loadingTask.promise.then((doc) => {
       setPdfDoc(doc);
       setNumPages(doc.numPages);
+      // Reset current page when loading new document
+      onPageChange(1);
     }).catch((error) => {
       console.error('Error loading PDF:', error);
     });
 
     return () => {
       loadingTask.destroy();
+      // Clean up when component unmounts or file changes
+      if (pdfDoc) {
+        pdfDoc.destroy();
+      }
+      // Clear all rendered pages
+      pageRefs.current.forEach((container) => {
+        container.innerHTML = '';
+      });
     };
-  }, [file]);
+  }, [file, onPageChange]);
 
   // Handle page changes
   useEffect(() => {

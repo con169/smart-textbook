@@ -196,13 +196,13 @@ const AppContent = () => {
           />
         )}
       </div>
-      <div className="chat-panel">
+      {file && (
         <ChatInterface
           messages={messages}
           onSendMessage={handleSendMessage}
           isLoading={chatIsLoading}
         />
-      </div>
+      )}
     </div>
   );
 };
