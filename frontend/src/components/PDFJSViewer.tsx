@@ -111,22 +111,44 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
     if (!pagesContainerRef.current || !pdfDoc) return;
 
     const options = {
-      root: pagesContainerRef.current, // Observe intersections within the container
-      rootMargin: '0px',
-      threshold: 0.5
+      root: pagesContainerRef.current,
+      rootMargin: '-10% 0px',  // Ignore edges of viewport
+      threshold: [0, 0.25, 0.5, 0.75, 1]  // Track multiple intersection points
+    };
+
+    let maxIntersection = {
+      ratio: 0,
+      pageNum: currentPage
     };
 
     const callback: IntersectionObserverCallback = (entries) => {
       entries.forEach(entry => {
         const pageNum = parseInt(entry.target.getAttribute('data-page') || '0');
+        
+        // Track the page with highest intersection ratio
+        if (entry.intersectionRatio > maxIntersection.ratio) {
+          maxIntersection = {
+            ratio: entry.intersectionRatio,
+            pageNum: pageNum
+          };
+        }
+
+        // Ensure the page is rendered if it's becoming visible
         if (entry.isIntersecting) {
-          // Ensure the page is rendered
           const container = entry.target as HTMLDivElement;
           if (!container.hasChildNodes()) {
             renderPage(pageNum, container);
           }
         }
       });
+
+      // Update page number if we have a clear winner and it's different
+      if (maxIntersection.ratio > 0.25 && maxIntersection.pageNum !== currentPage) {
+        onPageChange(maxIntersection.pageNum);
+      }
+
+      // Reset for next observation
+      maxIntersection = { ratio: 0, pageNum: currentPage };
     };
 
     observerRef.current = new IntersectionObserver(callback, options);
@@ -138,7 +160,7 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
     return () => {
       observerRef.current?.disconnect();
     };
-  }, [pdfDoc]);
+  }, [pdfDoc, currentPage, onPageChange]);
 
   // Expose scrollToPage function to parent
   useImperativeHandle(ref, () => ({
