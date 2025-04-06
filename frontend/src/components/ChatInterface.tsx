@@ -38,12 +38,28 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setIsCollapsed(true);
+    }
+  };
+
   return (
-    <div className={`chat-container ${isCollapsed ? 'collapsed' : ''}`}>
+    <div 
+      className={`chat-container ${isCollapsed ? 'collapsed' : ''}`}
+      role="region"
+      aria-label="Chat interface"
+      onKeyDown={handleKeyDown}
+      tabIndex={isCollapsed ? -1 : 0}
+    >
       <div className="chat-interface">
         <div 
           className="chat-header"
           onClick={() => setIsCollapsed(!isCollapsed)}
+          role="button"
+          tabIndex={0}
+          aria-expanded={!isCollapsed}
+          aria-controls="chat-content"
         >
           <span>AI Assistant</span>
           <div className="chat-controls">
@@ -62,11 +78,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
         
         {!isCollapsed && (
           <>
-            <div className="messages">
+            <div 
+              className="messages" 
+              role="log"
+              aria-live="polite"
+              aria-label="Chat messages"
+            >
               {messages.map((message, index) => (
-                <div key={index} className={`message ${message.role}`}>
+                <div 
+                  key={index} 
+                  className={`message ${message.role}`}
+                  role="article"
+                  aria-label={`${message.role === 'assistant' ? 'Assistant' : 'Your'} message`}
+                >
                   <div className="message-content">
-                    <div className="message-icon">
+                    <div 
+                      className="message-icon"
+                      role="img" 
+                      aria-label={message.role === 'assistant' ? 'Assistant' : 'You'}
+                    >
                       {message.role === 'assistant' ? 'A' : 'U'}
                     </div>
                     <div className="message-text">
@@ -91,16 +121,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
                 </div>
               ))}
               {isLoading && (
-                <div className="message assistant">
+                <div 
+                  className="message assistant"
+                  role="status"
+                  aria-label="Assistant is thinking"
+                >
                   <div className="message-content">
-                    <div className="message-icon">A</div>
+                    <div 
+                      className="message-icon"
+                      role="img"
+                      aria-label="Assistant"
+                    >
+                      A
+                    </div>
                     <div className="message-text loading">Thinking...</div>
                   </div>
                 </div>
               )}
               <div ref={messagesEndRef} />
             </div>
-            <form onSubmit={handleSubmit} className="input-form">
+            <form 
+              onSubmit={handleSubmit} 
+              className="input-form"
+              aria-label="Message input form"
+            >
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -112,6 +156,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
                     handleSubmit(e);
                   }
                 }}
+                aria-label="Message input"
+                aria-disabled={isLoading}
               />
               <div className="form-buttons">
                 <button 
@@ -122,7 +168,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
                 >
                   ▼
                 </button>
-                <button type="submit" disabled={!input.trim() || isLoading}>
+                <button 
+                  type="submit" 
+                  disabled={!input.trim() || isLoading}
+                  aria-label={isLoading ? "Please wait, sending message..." : "Send message"}
+                >
                   Send
                 </button>
               </div>
