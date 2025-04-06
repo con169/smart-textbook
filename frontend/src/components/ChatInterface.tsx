@@ -122,7 +122,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
               ))}
               {isLoading && (
                 <div 
-                  className="message assistant"
+                  className="message assistant loading"
                   role="status"
                   aria-label="Assistant is thinking"
                 >
@@ -134,7 +134,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
                     >
                       A
                     </div>
-                    <div className="message-text loading">Thinking...</div>
+                    <div className="message-text loading">Thinking</div>
                   </div>
                 </div>
               )}
