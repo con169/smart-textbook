@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import './App.css';
 import PDFJSViewer, { PDFJSViewerRef } from './components/PDFJSViewer';
 import ChatInterface from './components/ChatInterface';
-import { ThemeProvider } from './contexts/ThemeContext';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 
 interface TableOfContentsItem {
   title: string;
@@ -16,7 +16,9 @@ interface Message {
   content: string;
 }
 
-function App() {
+// Create a separate component for the app content
+const AppContent = () => {
+  const { theme, toggleTheme } = useTheme();
   const [file, setFile] = useState<string | null>(null);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -154,45 +156,59 @@ function App() {
   };
 
   return (
-    <ThemeProvider>
-      <div className="app">
-        <div className="sidebar">
-          <div className="file-upload">
-            <input
-              type="file"
-              accept=".pdf"
-              onChange={handleFileChange}
-              className="file-input"
-            />
-          </div>
-          <div className="table-of-contents">
-            {tableOfContents.map((item, index) => (
-              <TOCItem
-                key={index}
-                item={item}
-                onPageChange={handleTocClick}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="main-content">
-          {file && (
-            <PDFJSViewer
-              ref={pdfViewerRef}
-              file={file}
-              currentPage={currentPage}
-              onPageChange={setCurrentPage}
-            />
-          )}
-        </div>
-        <div className="chat-panel">
-          <ChatInterface
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            isLoading={chatIsLoading}
+    <div className="app">
+      <div className="sidebar">
+        <button 
+          onClick={toggleTheme}
+          className="theme-toggle"
+          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+        >
+          {theme === 'light' ? '🌙' : '☀️'}
+        </button>
+        <div className="file-upload">
+          <input
+            type="file"
+            accept=".pdf"
+            onChange={handleFileChange}
+            className="file-input"
           />
         </div>
+        <div className="table-of-contents">
+          {tableOfContents.map((item, index) => (
+            <TOCItem
+              key={index}
+              item={item}
+              onPageChange={handleTocClick}
+            />
+          ))}
+        </div>
       </div>
+      <div className="main-content">
+        {file && (
+          <PDFJSViewer
+            ref={pdfViewerRef}
+            file={file}
+            currentPage={currentPage}
+            onPageChange={setCurrentPage}
+          />
+        )}
+      </div>
+      <div className="chat-panel">
+        <ChatInterface
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          isLoading={chatIsLoading}
+        />
+      </div>
+    </div>
+  );
+};
+
+// Main App component just provides the theme
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
     </ThemeProvider>
   );
 }

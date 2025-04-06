@@ -41,4 +41,4 @@ yarn-error.log
 
 # OS
 .DS_Store
-Thumbs.db 
+Thumbs.db backend/uploads/temp_audio_*.mp3
