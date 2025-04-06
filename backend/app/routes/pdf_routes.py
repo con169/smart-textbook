@@ -3,12 +3,56 @@ import os
 from werkzeug.utils import secure_filename
 import PyPDF2
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from PyPDF2 import PdfReader
+import glob
 
 bp = Blueprint('pdf', __name__, url_prefix='/api/pdf')
 
 ALLOWED_EXTENSIONS = {'pdf'}
+TEMP_FILE_MAX_AGE = timedelta(hours=1)  # Clean files older than 1 hour
+
+def is_file_old(filepath):
+    """Check if a file is older than TEMP_FILE_MAX_AGE"""
+    if not os.path.exists(filepath):
+        return False
+    
+    file_time = datetime.fromtimestamp(os.path.getmtime(filepath))
+    return datetime.now() - file_time > TEMP_FILE_MAX_AGE
+
+def cleanup_old_files(force=False):
+    """Clean up old files from the uploads directory
+    Args:
+        force (bool): If True, remove all files regardless of age
+    """
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    
+    # Clean up old PDFs - only if force=True since these are main content
+    if force:
+        pdf_files = glob.glob(os.path.join(upload_folder, '*.pdf'))
+        for pdf in pdf_files:
+            try:
+                os.remove(pdf)
+            except Exception as e:
+                print(f"Error removing PDF {pdf}: {e}")
+        
+        # Clean up metadata files
+        metadata_files = glob.glob(os.path.join(upload_folder, '*_metadata.json'))
+        content_files = glob.glob(os.path.join(upload_folder, '*_content.txt'))
+        for file in metadata_files + content_files:
+            try:
+                os.remove(file)
+            except Exception as e:
+                print(f"Error removing metadata file {file}: {e}")
+    
+    # Always clean up old temporary audio files
+    temp_files = glob.glob(os.path.join(upload_folder, 'temp_audio_*.mp3'))
+    for temp in temp_files:
+        if force or is_file_old(temp):
+            try:
+                os.remove(temp)
+            except Exception as e:
+                print(f"Error removing temp file {temp}: {e}")
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -24,7 +68,11 @@ def upload_pdf():
         return jsonify({'error': 'No selected file'}), 400
     
     if file and file.filename.endswith('.pdf'):
-        filename = secure_filename(file.filename)
+        # Clean up ALL old files before uploading new one
+        cleanup_old_files(force=True)
+        
+        # Use a simple naming pattern
+        filename = 'current.pdf'
         filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
         
         # Save the file
@@ -124,4 +172,14 @@ def get_pdf_content(filename):
     return jsonify({
         'content': content,
         'metadata': metadata
-    }), 200 
+    }), 200
+
+@bp.route('/cleanup', methods=['POST'])
+def trigger_cleanup():
+    """Endpoint to manually trigger cleanup of old files"""
+    try:
+        cleanup_old_files(force=True)  # Clean everything
+        return jsonify({'message': 'Cleanup completed successfully'}), 200
+    except Exception as e:
+        print(f"Cleanup error: {str(e)}")  # Log the error
+        return jsonify({'error': f'Cleanup failed: {str(e)}'}), 500 
