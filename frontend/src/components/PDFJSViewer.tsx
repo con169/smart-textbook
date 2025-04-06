@@ -31,7 +31,7 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
   const containerRef = useRef<HTMLDivElement>(null);
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState(0);
-  const [scale, setScale] = useState(2.0);
+  const [scale, setScale] = useState(3.0);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const observerRef = useRef<IntersectionObserver | null>(null);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
@@ -342,8 +342,7 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
   // Zoom control functions
   const zoomIn = () => {
     setScale(prevScale => {
-      const newScale = prevScale + 0.25;
-      // Remove hard limit of 3.0, let it go up to 5.0 for better flexibility
+      const newScale = prevScale + 0.5;
       return Math.min(newScale, 5.0);
     });
     // Clear and re-render all pages
@@ -352,7 +351,7 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
     });
     if (pdfDoc) {
       pdfDoc.getPage(1).then(page => {
-        const viewport = page.getViewport({ scale: scale + 0.25 });
+        const viewport = page.getViewport({ scale: scale + 0.5 });
         pageRefs.current.forEach(container => {
           container.style.width = `${viewport.width}px`;
         });
@@ -362,9 +361,8 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
 
   const zoomOut = () => {
     setScale(prevScale => {
-      const newScale = prevScale - 0.25;
-      // Keep minimum at 0.5 to prevent pages from becoming too small
-      return Math.max(newScale, 0.5);
+      const newScale = prevScale - 0.5;
+      return Math.max(newScale, 1.5);
     });
     // Clear and re-render all pages
     pageRefs.current.forEach((container) => {
@@ -372,13 +370,16 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
     });
     if (pdfDoc) {
       pdfDoc.getPage(1).then(page => {
-        const viewport = page.getViewport({ scale: scale - 0.25 });
+        const viewport = page.getViewport({ scale: scale - 0.5 });
         pageRefs.current.forEach(container => {
           container.style.width = `${viewport.width}px`;
         });
       });
     }
   };
+
+  // Update the display percentage calculation
+  const displayPercentage = Math.round((scale / 3.0) * 100);
 
   return (
     <div className="pdfjs-container" ref={containerRef}>
@@ -462,8 +463,8 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
           {ttsError && <span className="error-message">{ttsError}</span>}
         </div>
         <div className="zoom-controls">
-          <button onClick={zoomOut} disabled={scale <= 0.5}>-</button>
-          <span>{Math.round(scale * 100)}%</span>
+          <button onClick={zoomOut} disabled={scale <= 1.5}>-</button>
+          <span>{displayPercentage}%</span>
           <button onClick={zoomIn} disabled={scale >= 5.0}>+</button>
         </div>
       </div>
