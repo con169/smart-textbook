@@ -55,43 +55,43 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
               e.stopPropagation();
               setIsCollapsed(!isCollapsed);
             }}
+            aria-label={isCollapsed ? 'Expand chat' : 'Collapse chat'}
           >
             {isCollapsed ? '▲' : '▼'}
           </button>
         </div>
       </div>
-      
-      {!isCollapsed && (
-        <>
-          <div className="messages">
-            {messages.map((message, index) => (
-              <div key={index} className={`message ${message.role}`}>
-                <div className="message-content">
-                  <div className="message-icon">
-                    {message.role === 'assistant' ? 'A' : 'U'}
-                  </div>
-                  <div className="message-text">
-                    <ReactMarkdown 
-                      remarkPlugins={[remarkGfm, remarkMath]}
-                      rehypePlugins={[rehypeKatex]}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
-                  </div>
+      <div className="chat-interface">
+        <div className="chat-messages">
+          {messages.map((message, index) => (
+            <div key={index} className={`message ${message.role}`}>
+              <div className="message-icon">
+                {message.role === 'assistant' ? 'A' : 'U'}
+              </div>
+              <div className="message-content">
+                <div className="message-text">
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
                 </div>
               </div>
-            ))}
-            {isLoading && (
-              <div className="message assistant loading">
-                <div className="message-content">
-                  <div className="message-icon">A</div>
-                  <div className="message-text">Thinking</div>
-                </div>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="message assistant loading">
+              <div className="message-icon">A</div>
+              <div className="message-content">
+                <div className="message-text">Thinking</div>
               </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-          <form onSubmit={handleSubmit} className="input-form">
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+        <div className="chat-input">
+          <form onSubmit={handleSubmit}>
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -102,16 +102,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
                   e.preventDefault();
                   handleSubmit(e);
                 }
+                handleKeyDown(e);
               }}
             />
-            <div className="form-buttons">
-              <button type="submit" disabled={!input.trim() || isLoading}>
-                Send
-              </button>
-            </div>
+            <button type="submit" disabled={!input.trim() || isLoading}>
+              Send
+            </button>
           </form>
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 };

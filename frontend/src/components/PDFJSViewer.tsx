@@ -163,8 +163,13 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
   }, [pdfDoc, currentPage, onPageChange]);
 
   // Expose scrollToPage function to parent
-  useImperativeHandle(ref, () => ({
-    scrollToPage: (pageNumber: number) => {
+  useImperativeHandle(ref, () => {
+    const scrollToPageImpl = async (pageNumber: number) => {
+      if (isLoading) {
+        console.log('Already loading, ignoring scroll request');
+        return;
+      }
+
       console.log('scrollToPage called with:', pageNumber);
       const targetPage = Math.max(1, Math.min(pageNumber, numPages));
       console.log('Target page after bounds check:', targetPage);
@@ -172,44 +177,113 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
       const pageElement = pageRefs.current.get(targetPage);
       console.log('Found page element:', !!pageElement);
       
-      if (pageElement) {
-        // Mark this page as needing to scroll
-        pageElement.setAttribute('data-needs-scroll', 'true');
-        // Ensure the page is rendered
-        if (!pageElement.hasChildNodes()) {
-          console.log('Page not rendered, rendering now');
-          renderPage(targetPage, pageElement);
-        }
-
-        // Calculate scroll position taking scale into account
-        if (pagesContainerRef.current) {
+      if (pageElement && pdfDoc) {
+        setIsLoading(true);
+        try {
+          // Calculate the current visible page from container scroll position
           const container = pagesContainerRef.current;
+          if (!container) throw new Error('Container not found');
+          
+          const currentScrollTop = container.scrollTop;
+          const pageHeight = container.firstElementChild?.clientHeight || 0;
+          const currentVisiblePage = Math.floor(currentScrollTop / pageHeight) + 1;
+          
+          // For long jumps, we'll do it in chunks
+          const CHUNK_SIZE = 50; // Number of pages to jump at once
+          const distance = Math.abs(targetPage - currentVisiblePage);
+          
+          if (distance > CHUNK_SIZE) {
+            // Calculate intermediate target
+            const direction = targetPage > currentVisiblePage ? 1 : -1;
+            const intermediateTarget = currentVisiblePage + (direction * CHUNK_SIZE);
+            
+            // Pre-render the intermediate target page
+            const intermediatePage = pageRefs.current.get(intermediateTarget);
+            if (intermediatePage && !intermediatePage.hasChildNodes()) {
+              await renderPage(intermediateTarget, intermediatePage);
+            }
+            
+            // Scroll to intermediate position
+            const intermediateElement = pageRefs.current.get(intermediateTarget);
+            if (intermediateElement) {
+              const elementTop = intermediateElement.offsetTop;
+              const containerTop = container.offsetTop;
+              const scrollPosition = elementTop - containerTop;
+              
+              container.scrollTo({
+                top: scrollPosition,
+                behavior: 'auto'
+              });
+              
+              // Update page number to intermediate position
+              onPageChange(intermediateTarget);
+              
+              // Schedule next chunk after a short delay
+              setTimeout(() => {
+                setIsLoading(false);
+                scrollToPageImpl(targetPage);
+              }, 100);
+              return;
+            }
+          }
+          
+          // For short jumps or final approach, render target and neighbors
+          if (!pageElement.hasChildNodes()) {
+            console.log('Rendering target page');
+            await renderPage(targetPage, pageElement);
+          }
+
+          // Calculate final scroll position
           const elementTop = pageElement.offsetTop;
           const containerTop = container.offsetTop;
           const scrollPosition = elementTop - containerTop;
 
-          // Add a small delay to ensure the page is rendered with the current scale
+          console.log('Scrolling to final position:', scrollPosition);
+
+          // Scroll to final position
+          container.scrollTo({
+            top: scrollPosition,
+            behavior: 'auto'
+          });
+
+          // Update the page number
+          onPageChange(targetPage);
+          
+          // Pre-render neighbors after reaching target
+          const neighbors = [-1, 1];
+          for (const offset of neighbors) {
+            const neighborPage = targetPage + offset;
+            if (neighborPage >= 1 && neighborPage <= numPages) {
+              const element = pageRefs.current.get(neighborPage);
+              if (element && !element.hasChildNodes()) {
+                renderPage(neighborPage, element).catch(console.error);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error scrolling to page:', error);
+        } finally {
           setTimeout(() => {
-            container.scrollTo({
-              top: scrollPosition,
-              behavior: 'smooth'
-            });
+            setIsLoading(false);
           }, 100);
         }
-
-        // Update the page number
-        onPageChange(targetPage);
       } else {
         console.log('Page element not found in refs');
+        setIsLoading(false);
       }
-    }
-  }));
+    };
+
+    return {
+      scrollToPage: scrollToPageImpl
+    };
+  });
 
   // Render page
-  const renderPage = async (pageNum: number, container: HTMLDivElement) => {
+  const renderPage = async (pageNum: number, container: HTMLDivElement): Promise<void> => {
     if (!pdfDoc) return;
 
     try {
+      console.log(`Rendering page ${pageNum}`);
       const page = await pdfDoc.getPage(pageNum);
       const viewport = page.getViewport({ scale });
 
@@ -262,8 +336,10 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
         textDivs: []
       });
 
+      console.log(`Page ${pageNum} rendered successfully`);
     } catch (error) {
       console.error(`Error rendering page ${pageNum}:`, error);
+      throw error;
     }
   };
 

@@ -1,22 +1,21 @@
 .chat-container {
   position: fixed;
-  right: 20px;
   bottom: 20px;
-  z-index: 9999;
-  width: 500px;
-  height: 700px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  overflow: hidden;
-  margin: 0;
+  right: 20px;
+  width: 450px;
+  height: 600px;
   background-color: var(--background-primary);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  overflow: hidden;
   border: 1px solid var(--border-color);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .chat-container.collapsed {
-  height: 48px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  height: auto;
 }
 
 .chat-container.hidden {
@@ -40,17 +39,17 @@
 }
 
 .chat-header {
+  padding: 12px 16px;
+  background-color: var(--primary-color);
+  color: white;
+  cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 16px;
-  background-color: var(--primary-color);
-  color: white;
+  user-select: none;
+  min-height: 56px;
   border-bottom: 1px solid var(--border-color);
-  height: 48px;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition: background-color 0.2s;
+  overflow: hidden;
 }
 
 .chat-header span {
@@ -58,11 +57,10 @@
   font-weight: 500;
   flex: 1;
   text-align: left;
-  margin-right: auto;
-  line-height: 48px;
-  display: flex;
-  align-items: center;
-  height: 100%;
+  margin-right: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chat-container.collapsed .chat-header:hover {
@@ -122,115 +120,95 @@
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-.messages {
+.chat-messages {
   flex: 1;
-  overflow-y: auto;
-  padding: 1rem;
+  overflow-y: scroll;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   background-color: var(--background-primary);
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  min-height: 0; /* Critical for Firefox scrolling */
+}
+
+/* Webkit scrollbar styles */
+.chat-messages::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 4px;
+  border: 2px solid var(--scrollbar-track);
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
 }
 
 .message {
   display: flex;
-  margin: 1rem 0;
+  gap: 12px;
+  max-width: 85%;
+  padding: 0;
+  position: relative;
+}
+
+.message-content {
+  padding: 12px 16px;
+  border-radius: 12px;
+  word-wrap: break-word;
 }
 
 .message.assistant {
   align-self: flex-start;
+  margin-right: auto;
 }
 
 .message.user {
   align-self: flex-end;
-}
-
-.message-content {
-  display: flex;
-  gap: 12px;
-  max-width: 90%;
-  padding: 1rem 1.25rem;
-  border-radius: 1rem;
+  margin-left: auto;
+  flex-direction: row-reverse;
 }
 
 .message.assistant .message-content {
-  background-color: var(--background-secondary);
-  color: var(--text-color);
-  border-bottom-left-radius: 0.25rem;
-  margin-right: auto;
+  background-color: var(--message-bg);
+  color: var(--text-primary);
+  border-bottom-left-radius: 4px;
 }
 
 .message.user .message-content {
   background-color: var(--primary-color);
-  color: white !important;
-  border-bottom-right-radius: 0.25rem;
-  margin-left: auto;
-}
-
-/* Ensure message text is visible in both themes */
-.message.assistant .message-text {
-  color: var(--text-color);
-}
-
-.message.user .message-text {
-  color: white !important;
-}
-
-.message.user .message-text p,
-.message.user .message-text ul,
-.message.user .message-text ol,
-.message.user .message-text li,
-.message.user .message-text h1,
-.message.user .message-text h2,
-.message.user .message-text h3,
-.message.user .message-text code {
-  color: white !important;
-}
-
-.message.assistant .message-text p,
-.message.assistant .message-text ul,
-.message.assistant .message-text ol,
-.message.assistant .message-text li,
-.message.assistant .message-text h1,
-.message.assistant .message-text h2,
-.message.assistant .message-text h3 {
-  color: var(--text-color);
+  color: white;
+  border-bottom-right-radius: 4px;
 }
 
 .message-text {
-  flex: 1;
-  word-break: break-word;
-  overflow-wrap: break-word;
   font-size: 14px;
   line-height: 1.5;
   white-space: pre-wrap;
 }
 
-/* KaTeX Math Styles */
-.message .katex {
-  font-size: 1.1em;
-  line-height: 1.2;
+/* Ensure message text is visible in both themes */
+.message.assistant .message-text {
+  color: var(--text-primary);
 }
 
-.message.user .katex {
-  color: white !important;
+.message.assistant .message-text code {
+  background-color: var(--code-bg);
+  color: var(--text-primary);
 }
 
-.message.assistant .katex {
-  color: var(--text-color);
-}
-
-.message .katex-display {
-  margin: 0.5em 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-.message .katex-html {
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-/* Ensure inline math doesn't break */
-.message .katex-mathml {
-  display: inline-block;
+.message.user .message-text,
+.message.user .message-text code {
+  color: white;
 }
 
 .message-text p {
@@ -283,97 +261,95 @@
   padding: 0;
 }
 
-.input-form {
-  padding: 1rem;
-  background-color: var(--background-primary);
+.chat-input {
+  padding: 16px;
   border-top: 1px solid var(--border-color);
-  display: flex;
-  gap: 8px;
-  position: relative;
-  z-index: 10000;
-}
-
-.form-buttons {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-}
-
-.quick-collapse-button {
-  background-color: transparent;
-  color: var(--text-secondary);
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  font-size: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  position: relative;
-  outline-offset: 2px;
-}
-
-.quick-collapse-button:hover {
-  background-color: var(--background-secondary);
-  color: var(--text-color);
-  transform: translateY(-1px);
-}
-
-.quick-collapse-button:focus-visible {
-  outline: 2px solid white;
-}
-
-textarea {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  resize: none;
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--text-color);
   background-color: var(--background-primary);
-  transition: border-color 0.2s;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0; /* Prevent input area from shrinking */
 }
 
-textarea:focus {
+.chat-input form {
+  display: flex;
+  gap: 12px;
+  align-items: center; /* Center align the input and button */
+}
+
+.chat-input textarea {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  resize: none !important;
+  min-height: 44px;
+  height: 44px;
+  max-height: 44px;
+  line-height: 20px;
+  overflow-y: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.chat-input textarea:focus {
   border-color: var(--primary-color);
   outline: none;
   box-shadow: 0 0 0 2px var(--primary-color-light);
 }
 
-textarea:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-  background-color: var(--background-secondary);
-}
-
-button[type="submit"] {
-  padding: 8px 16px;
+.chat-input button {
+  padding: 12px 20px;
   background-color: var(--primary-color);
   color: white;
   border: none;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  height: 32px;
-  outline-offset: 2px;
+  font-weight: 500;
 }
 
-button[type="submit"]:focus-visible {
-  outline: 2px solid var(--primary-color);
-  outline-offset: 2px;
+.chat-input button:hover {
+  background-color: var(--primary-color-dark);
+  transform: translateY(-1px);
 }
 
-button[type="submit"]:disabled {
-  opacity: 0.7;
+.chat-input button:disabled {
+  background-color: var(--disabled-color);
   cursor: not-allowed;
-  background-color: var(--background-secondary);
+  transform: none;
+}
+
+.chat-container.collapsed .chat-messages,
+.chat-container.collapsed .chat-input {
+  display: none;
+}
+
+.ai-message-container {
+  position: relative;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.ai-message {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 15px;
+  border-radius: 10px;
+  margin-top: 10px;
+  position: relative;
+  z-index: 1;
+  width: fit-content;
+  max-width: 85%;
+}
+
+/* Ensure the chat interface doesn't overflow the viewport */
+@media screen and (max-height: 700px) {
+  .chat-container {
+    height: calc(100vh - 40px);
+  }
 }
 
 /* Skip navigation for keyboard users */
@@ -475,24 +451,24 @@ button[type="submit"]:disabled {
 
 /* Message icons */
 .message-icon {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 14px;
   flex-shrink: 0;
 }
 
 .message.user .message-icon {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: white;
+  background-color: var(--primary-color-light);
+  color: var(--primary-color);
 }
 
 .message.assistant .message-icon {
-  background-color: var(--primary-color);
-  color: white;
+  background-color: var(--message-icon-bg);
+  color: var(--text-primary);
 }
 
 /* Focus outline styles */
@@ -505,4 +481,77 @@ button[type="submit"]:disabled {
 /* Remove focus outline for mouse users */
 :focus:not(:focus-visible) {
   outline: none;
+}
+
+/* Dark mode specific adjustments */
+[data-theme='dark'] .message.assistant .message-content {
+  background-color: var(--dark-message-bg);
+}
+
+[data-theme='dark'] .message.assistant .message-icon {
+  background-color: var(--dark-message-icon-bg);
+  color: var(--text-inverse);
+}
+
+[data-theme='dark'] .chat-input input {
+  background-color: var(--dark-input-bg);
+}
+
+/* KaTeX Math Styles */
+.message .katex {
+  font-size: 1.1em;
+  line-height: 1.2;
+}
+
+.message.user .katex {
+  color: white;
+}
+
+.message.assistant .katex {
+  color: var(--text-primary);
+}
+
+.message .katex-display {
+  margin: 0.5em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.message .katex-html {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Ensure inline math doesn't break */
+.message .katex-mathml {
+  display: inline-block;
+}
+
+/* CSS Variables for theming */
+:root {
+  --message-bg: #f0f2f5;
+  --message-icon-bg: #e4e6eb;
+  --code-bg: rgba(0, 0, 0, 0.05);
+  --input-bg: white;
+  --dark-message-bg: #3a3b3c;
+  --dark-message-icon-bg: #4e4f50;
+  --dark-input-bg: #3a3b3c;
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --scrollbar-thumb: #c1c1c1;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb-hover: #a8a8a8;
+}
+
+[data-theme='dark'] {
+  --scrollbar-thumb: #666;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb-hover: #888;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 500px) {
+  .chat-container {
+    width: calc(100vw - 40px);
+    right: 20px;
+  }
 } 
