@@ -44,7 +44,7 @@
 
 .app {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 400px;
+  grid-template-columns: 260px 1fr;
   gap: 0;
   height: 100vh;
   padding: 0;
@@ -238,6 +238,7 @@
 }
 
 .main-content {
+  grid-column: 2;
   height: 100vh;
   overflow: auto;
   position: relative;
@@ -318,102 +319,23 @@
   font-size: 0.75rem;
 }
 
-.split-view {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-}
-
-.pdf-section {
-  width: 50%;
-  background-color: #444654;
-  border-right: 1px solid #565869;
-  overflow: hidden;
-}
-
+/* Remove all the split-view related styles */
+.split-view,
+.pdf-section,
 .chat-section {
-  width: 50%;
-  display: flex;
-  flex-direction: column;
-  background-color: #343541;
+  display: none;
 }
 
-.upload-status {
-  position: absolute;
-  top: 48px;
-  left: 0;
-  right: 0;
-  padding: 0.75rem;
-  text-align: center;
-  font-size: 0.875rem;
-  animation: slideDown 0.3s ease-out;
-  z-index: 20;
-}
-
-.upload-status.success {
-  background-color: rgba(16, 163, 127, 0.9);
-  color: #ffffff;
-}
-
-.upload-status.error {
-  background-color: rgba(239, 68, 68, 0.9);
-  color: #ffffff;
-}
-
-@keyframes slideDown {
-  from {
-    transform: translateY(-100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-@keyframes pulse {
-  0% { opacity: 1; }
-  50% { opacity: 0.6; }
-  100% { opacity: 1; }
-}
-
-/* Target text layer from PDF.js */
-.textLayer {
-  position: absolute;
-  text-align: initial;
-  left: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  overflow: hidden;
-  opacity: 0.2;
-  line-height: 1.0;
-}
-
-/* Target annotation layer from PDF.js */
-.annotationLayer {
-  position: absolute;
-  left: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
-}
-
-.chat-panel {
-  background-color: var(--background-primary);
-  border-radius: 0;
-  padding: 0.5rem;
-  border-left: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  color: var(--text-primary);
+/* Remove only the unused chat prompt */
+.chat-prompt {
+  display: none;
 }
 
 /* PDF viewer styles */
 .pdf-container {
   height: 100%;
-  padding: 0;
+  width: 100%;
+  overflow: auto;
   background-color: var(--background-secondary);
 }
 
@@ -444,38 +366,6 @@
 
 .theme-toggle:hover {
   background-color: var(--background-secondary);
-}
-
-.chat-interface {
-  height: 100vh;
-  border-left: 1px solid var(--border-color);
-  background-color: var(--background-primary);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.upload-prompt, .chat-prompt {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  padding: 2rem;
-  color: var(--text-secondary);
-  font-size: 1.1rem;
-  text-align: center;
-  background-color: var(--background-secondary);
-  border-radius: 8px;
-  margin: 1rem;
-}
-
-.chat-container {
-  height: 100vh;
-  border-left: 1px solid var(--border-color);
-  background-color: var(--background-primary);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
 }
 
 .toc-header {

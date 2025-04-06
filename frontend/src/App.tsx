@@ -278,19 +278,13 @@ const AppContent = () => {
           </div>
         )}
       </div>
-      <div className="chat-container">
-        {file ? (
-          <ChatInterface
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            isLoading={chatIsLoading}
-          />
-        ) : (
-          <div className="chat-prompt">
-            Chat will be available after uploading a PDF
-          </div>
-        )}
-      </div>
+      {file && (
+        <ChatInterface
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          isLoading={chatIsLoading}
+        />
+      )}
     </div>
   );
 };
