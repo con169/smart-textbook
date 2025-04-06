@@ -94,7 +94,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
   useEffect(() => {
     // Fetch available voices when component mounts
     console.log('Starting to fetch voices from backend...');
-    fetch('http://localhost:5000/api/tts/voices')
+    fetch('http://localhost:8000/api/tts/voices')
       .then(response => {
         console.log('Got response:', response.status);
         if (!response.ok) {
@@ -167,7 +167,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ file, onPageChange, currentPage }
 
       const nonEmptyLines = lines.filter(line => line.trim().length > 0);
 
-      const response = await fetch('http://localhost:5000/api/tts/read-pdf', {
+      const response = await fetch('http://localhost:8000/api/tts/read-pdf', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

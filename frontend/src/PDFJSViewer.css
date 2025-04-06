@@ -1,0 +1,32 @@
+.pdfjs-text-layer > span {
+  color: black !important; /* Force black text for readability */
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.pdfjs-page-container {
+  position: relative;
+  background-color: white !important; /* Force white background */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  width: fit-content;
+  margin: 1rem auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Keep text layer visible */
+.pdfjs-text-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 1 !important; /* Make text fully visible */
+  line-height: 1.0;
+  user-select: text;
+  color: black !important;
+} 

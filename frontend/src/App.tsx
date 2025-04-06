@@ -44,7 +44,7 @@ function App() {
   // Get table of contents from the backend
   const fetchTOC = async () => {
     try {
-      const tocResponse = await fetch('http://localhost:5000/api/qa/get-toc');
+      const tocResponse = await fetch('http://localhost:8000/api/qa/get-toc');
       if (tocResponse.ok) {
         const tocData = await tocResponse.json();
         console.log('Raw TOC data from backend:', tocData);
@@ -81,7 +81,7 @@ function App() {
         setTableOfContents([]);
         setCurrentPage(1);
 
-        const response = await fetch('http://localhost:5000/api/qa/upload', {
+        const response = await fetch('http://localhost:8000/api/qa/upload', {
           method: 'POST',
           body: formData,
         });
@@ -90,8 +90,19 @@ function App() {
           throw new Error('Failed to upload file');
         }
 
-        // Fetch TOC after successful upload
-        await fetchTOC();
+        const data = await response.json();
+        console.log('Upload response:', data);  // Debug log
+
+        // Set TOC directly from upload response
+        if (data.toc) {
+          const validatedTOC = data.toc.map((item: any) => ({
+            ...item,
+            page: item.pageNumber || 1,
+            pageNumber: undefined
+          }));
+          console.log('Setting TOC:', validatedTOC);  // Debug log
+          setTableOfContents(validatedTOC);
+        }
         
         // Add welcome message
         setMessages([{
@@ -116,7 +127,7 @@ function App() {
     setChatIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/qa/ask', {
+      const response = await fetch('http://localhost:8000/api/qa/ask', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
