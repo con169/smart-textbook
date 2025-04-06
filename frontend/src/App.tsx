@@ -27,6 +27,7 @@ const AppContent = () => {
   const [tableOfContents, setTableOfContents] = useState<TableOfContentsItem[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatIsLoading, setChatIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const pdfViewerRef = useRef<PDFJSViewerRef>(null);
   const [chatContext, setChatContext] = useState<Message[]>([]);
 
@@ -73,20 +74,25 @@ const AppContent = () => {
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
+    console.log('Selected file:', selectedFile);
+    
     if (selectedFile && selectedFile.type === 'application/pdf') {
-      const fileUrl = URL.createObjectURL(selectedFile);
-      setFile(fileUrl);
-      
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-
       try {
+        // Set loading state
+        setIsUploading(true);
+
         // Reset states
+        setFile(null);
         setMessages([]);
         setTableOfContents([]);
         setCurrentPage(1);
 
-        // Use the PDF routes endpoint instead of QA routes
+        // Create form data
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        console.log('Uploading file...');
+
+        // Upload the file
         const response = await fetch('http://localhost:8000/api/pdf/upload', {
           method: 'POST',
           body: formData,
@@ -97,9 +103,14 @@ const AppContent = () => {
         }
 
         const data = await response.json();
-        console.log('Upload response:', data);  // Debug log
+        console.log('Upload response:', data);
 
-        // Set TOC directly from upload response
+        // Set the file URL
+        const fileUrl = 'http://localhost:8000/api/pdf/file/current.pdf';
+        console.log('Setting file URL:', fileUrl);
+        setFile(fileUrl);
+
+        // Set TOC if available
         if (data.toc) {
           const validatedTOC = data.toc.map((item: any) => ({
             ...item,
@@ -107,7 +118,7 @@ const AppContent = () => {
             level: item.level || 0,
             children: item.children || []
           }));
-          console.log('Setting TOC:', validatedTOC);  // Debug log
+          console.log('Setting TOC:', validatedTOC);
           setTableOfContents(validatedTOC);
         }
         
@@ -116,12 +127,16 @@ const AppContent = () => {
           role: 'assistant',
           content: `I've loaded your PDF. I can answer questions about what you're currently viewing. Navigate to a specific page and ask me questions about its content. Currently showing page ${currentPage}.`
         }]);
+
       } catch (error) {
-        console.error('Error:', error);
+        console.error('Error during file upload:', error);
+        setFile(null);
         setMessages([{
           role: 'assistant',
           content: 'Sorry, I encountered an error loading the PDF. Please try again.'
         }]);
+      } finally {
+        setIsUploading(false);
       }
     }
   };
@@ -209,8 +224,17 @@ const AppContent = () => {
     }
   };
 
+  // Add debug log for render
+  console.log('Rendering App with file:', file);
+
   return (
     <div className="app">
+      {isUploading && (
+        <div className="loading-overlay">
+          <div className="loading-spinner" />
+          <div>Processing PDF...</div>
+        </div>
+      )}
       <div className="sidebar">
         <button 
           onClick={toggleTheme}
@@ -228,6 +252,9 @@ const AppContent = () => {
           />
         </div>
         <div className="table-of-contents">
+          {tableOfContents.length > 0 && (
+            <div className="toc-header">Table of Contents</div>
+          )}
           {tableOfContents.map((item, index) => (
             <TOCItem
               key={index}
@@ -238,22 +265,32 @@ const AppContent = () => {
         </div>
       </div>
       <div className="main-content">
-        {file && (
+        {file ? (
           <PDFJSViewer
             ref={pdfViewerRef}
             file={file}
             currentPage={currentPage}
             onPageChange={setCurrentPage}
           />
+        ) : (
+          <div className="upload-prompt">
+            Please upload a PDF file to begin
+          </div>
         )}
       </div>
-      {file && (
-        <ChatInterface
-          messages={messages}
-          onSendMessage={handleSendMessage}
-          isLoading={chatIsLoading}
-        />
-      )}
+      <div className="chat-container">
+        {file ? (
+          <ChatInterface
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            isLoading={chatIsLoading}
+          />
+        ) : (
+          <div className="chat-prompt">
+            Chat will be available after uploading a PDF
+          </div>
+        )}
+      </div>
     </div>
   );
 };
