@@ -5,10 +5,12 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import './ChatInterface.css';
+import TypewriterMessage from './TypewriterMessage';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  isTyping?: boolean;
 }
 
 interface ChatInterfaceProps {
@@ -21,6 +23,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
   const [input, setInput] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [typingMessageIndex, setTypingMessageIndex] = useState<number | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -28,7 +31,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, typingMessageIndex]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,21 +73,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
               </div>
               <div className="message-content">
                 <div className="message-text">
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm, remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
-                  >
-                    {message.content}
-                  </ReactMarkdown>
+                  {message.role === 'assistant' && index === messages.length - 1 ? (
+                    <TypewriterMessage 
+                      content={message.content} 
+                      onComplete={() => setTypingMessageIndex(null)}
+                    />
+                  ) : message.role === 'assistant' ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath, remarkGfm]}
+                      rehypePlugins={[rehypeKatex]}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  ) : (
+                    message.content
+                  )}
                 </div>
               </div>
             </div>
           ))}
           {isLoading && (
-            <div className="message assistant loading">
-              <div className="message-icon">A</div>
-              <div className="message-content">
-                <div className="message-text">Thinking</div>
+            <div className="loading-indicator">
+              <div className="loading-dots">
+                <span></span>
+                <span></span>
+                <span></span>
               </div>
             </div>
           )}

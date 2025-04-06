@@ -125,13 +125,26 @@ def ask_question():
         chunks = chunk_text(text)
         all_responses = []
 
+        # Update the system message in the ask_question route
+        system_message = """You are a helpful assistant that answers questions about the content of a book. 
+Your responses should be clear and well-structured. When writing:
+- Use bullet points for key points
+- Keep paragraphs short and focused
+- Use sections with headers when appropriate
+- Highlight important concepts
+- Keep responses concise yet informative
+- For mathematical expressions, use LaTeX with proper delimiters:
+  * For inline math, use $...$ (e.g., $x^2$)
+  * For display math, use $$...$$ (e.g., $$\\int x dx = \\frac{1}{2}x^2 + C$$)
+Base your answers only on the provided text. If you cannot find relevant information in the text, say so clearly."""
+
         # Process each chunk with OpenAI
         for i, chunk in enumerate(chunks):
             print(f"Processing chunk {i + 1}")
             response = get_openai_client().chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that answers questions about the content of a book. Your responses should be clear and well-structured. For summaries:\n- Use bullet points for key points\n- Keep paragraphs short and focused\n- Use sections with headers when appropriate\n- Highlight important concepts\n- Keep responses concise yet informative\nBase your answers only on the provided text. If you cannot find relevant information in the text, say so clearly."},
+                    {"role": "system", "content": system_message},
                     {"role": "user", "content": f"Here is the {context}:\n\n{chunk}\n\nQuestion: {question}"}
                 ],
                 max_tokens=500
@@ -390,40 +403,74 @@ def chat():
         else:
             page_content = "No PDF file is currently loaded."
 
-        # Prepare messages for OpenAI
+        # Update the system message in the chat route
         system_message = {
             "role": "system",
-            "content": f"""You are an AI assistant helping with a PDF document. 
-            The user is currently on page {current_page}. 
-            Here's the content of the current page:
-            {page_content}
+            "content": """You are an AI assistant helping with a PDF document that can also handle mathematical questions.
+
+            CURRENT PAGE CONTENT (Page %d):
+            %s
+
+            INSTRUCTIONS:
+            1. For PDF Content:
+               - Base your answers on the PDF content above
+               - Be specific about which page you're referencing
+               - Maintain context from the conversation history
             
-            Maintain context from the conversation history and provide relevant answers.
-            If referring to content from the PDF, be specific about which page you're referencing."""
+            2. For Mathematical Content:
+               - NEVER use square brackets [ ] for math
+               - NEVER use regular parentheses ( ) for variables
+               - ALWAYS use $$...$$ for display math
+               - ALWAYS use $...$ for inline math
+               - Use proper LaTeX commands:
+                 * Integration: $$\int x \, dx = \frac{x^2}{2} + C$$
+                 * Variables: $x$, $y$, $z$ (not (x), [y], etc.)
+                 * Fractions: \frac{numerator}{denominator}
+                 * Powers: x^2, x^n
+                 * Add proper spacing with \, where needed
+            
+            3. For Mixed Questions:
+               - If the question relates to math concepts in the PDF, explain both the context and the math
+               - If asked to solve a problem from the PDF, show the problem and its solution
+               - Use LaTeX for any mathematical expressions found in or related to the PDF content
+
+            EXAMPLE CORRECT RESPONSE:
+            The integral of x dx is:
+            $$\int x \, dx = \frac{x^2}{2} + C$$
+            where $C$ is the constant of integration.
+
+            EXAMPLE INCORRECT RESPONSE (DO NOT USE):
+            The integral of (x , dx) is:
+            [ \int x , dx = \frac{1}{2} x^2 + C ]
+            where (C) is the constant of integration.
+            """ % (current_page, page_content)
         }
 
         # Convert our messages to OpenAI format and add the current question
         chat_messages = [system_message] + [
-            {"role": msg["role"], "content": msg["content"]} 
+            {"role": msg["role"], "content": str(msg["content"])} 
             for msg in messages
         ]
         
         # Add the current question if it's not already in the messages
         if question and (not messages or messages[-1]["content"] != question):
-            chat_messages.append({"role": "user", "content": question})
+            chat_messages.append({"role": "user", "content": str(question)})
 
         # Get response from OpenAI using the new client format
         client = get_openai_client()
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=chat_messages,
-            temperature=0.7,
-            max_tokens=500
-        )
-
-        return jsonify({
-            "answer": response.choices[0].message.content
-        })
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=chat_messages,
+                temperature=0.7,
+                max_tokens=800
+            )
+            return jsonify({
+                "answer": response.choices[0].message.content
+            })
+        except Exception as api_error:
+            print(f"OpenAI API Error: {str(api_error)}")
+            return jsonify({"error": "Failed to get response from AI model. Please try again."}), 500
 
     except RateLimitError as e:
         print(f"OpenAI Rate Limit Error: {str(e)}")

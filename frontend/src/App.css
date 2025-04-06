@@ -405,3 +405,135 @@
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+/* Add these to your existing styles */
+.message.assistant.typing {
+  position: relative;
+}
+
+.message.assistant.typing::after {
+  content: '▋';
+  position: absolute;
+  margin-left: 2px;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Add these to your existing styles */
+.markdown-content {
+  width: 100%;
+}
+
+.markdown-content pre {
+  background-color: var(--background-secondary);
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.markdown-content code {
+  background-color: var(--background-secondary);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+.markdown-content p {
+  margin: 0.5em 0;
+}
+
+.markdown-content ul, .markdown-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+/* Math styling */
+.katex-display {
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5em 0;
+}
+
+.katex {
+  font-size: 1.1em !important;
+  line-height: 1.2;
+  text-rendering: auto;
+}
+
+.katex-display {
+  display: block;
+  margin: 1em 0;
+  text-align: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.katex-display > .katex {
+  display: inline-block;
+  text-align: center;
+  max-width: 100%;
+}
+
+/* Light theme math */
+[data-theme='light'] .message.assistant .katex {
+  color: var(--text-primary);
+}
+
+[data-theme='light'] .message.user .katex {
+  color: white;
+}
+
+/* Dark theme math */
+[data-theme='dark'] .message.assistant .katex {
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] .message.user .katex {
+  color: white;
+}
+
+/* Ensure inline math is properly aligned */
+.katex-html {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Style for display math ($$...$$) */
+.math.math-display {
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+/* Style for inline math ($...$) */
+.math.math-inline {
+  padding: 0 0.2em;
+}
+
+/* Typing effect */
+.typing-content {
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+
+/* Message container */
+.message {
+  padding: 1rem;
+  border-radius: 8px;
+  margin: 0.5rem 0;
+  line-height: 1.5;
+}
+
+.message.assistant {
+  background-color: var(--background-secondary);
+  color: var(--text-primary);
+}
+
+.message.user {
+  background-color: var(--accent-color);
+  color: white;
+}
