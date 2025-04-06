@@ -43,7 +43,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 0 16px;
   background-color: var(--primary-color);
   color: white;
   border-bottom: 1px solid var(--border-color);
@@ -51,7 +51,18 @@
   flex-shrink: 0;
   cursor: pointer;
   transition: background-color 0.2s;
-  outline-offset: -2px;
+}
+
+.chat-header span {
+  font-size: 16px;
+  font-weight: 500;
+  flex: 1;
+  text-align: left;
+  margin-right: auto;
+  line-height: 48px;
+  display: flex;
+  align-items: center;
+  height: 100%;
 }
 
 .chat-container.collapsed .chat-header:hover {
@@ -61,6 +72,7 @@
 .chat-controls {
   display: flex;
   gap: 4px;
+  margin-left: auto;
 }
 
 .collapse-button {
