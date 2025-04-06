@@ -42,3 +42,8 @@ yarn-error.log
 # OS
 .DS_Store
 Thumbs.db backend/uploads/temp_audio_*.mp3
+
+# PDFs and uploads
+*.pdf
+uploads/
+backend/uploads/

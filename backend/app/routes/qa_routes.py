@@ -5,6 +5,11 @@ from openai import OpenAI, RateLimitError
 import tiktoken
 from datetime import datetime
 from PyPDF2 import PdfReader
+import openai
+from dotenv import load_dotenv
+
+load_dotenv()
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
 bp = Blueprint('qa', __name__, url_prefix='/api/qa')
 
@@ -364,4 +369,65 @@ def get_table_of_contents():
         return jsonify({'toc': toc}), 200
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500 
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/chat', methods=['POST'])
+def chat():
+    """Handle contextual chat with conversation history"""
+    try:
+        data = request.json
+        messages = data.get('messages', [])
+        current_page = data.get('currentPage', 1)
+        question = data.get('question', '')
+
+        # Get current page content
+        if current_app.config.get('CURRENT_PDF'):
+            reader = PdfReader(current_app.config['CURRENT_PDF'])
+            if 1 <= current_page <= len(reader.pages):
+                page_content = reader.pages[current_page - 1].extract_text()
+            else:
+                page_content = "No content available for this page."
+        else:
+            page_content = "No PDF file is currently loaded."
+
+        # Prepare messages for OpenAI
+        system_message = {
+            "role": "system",
+            "content": f"""You are an AI assistant helping with a PDF document. 
+            The user is currently on page {current_page}. 
+            Here's the content of the current page:
+            {page_content}
+            
+            Maintain context from the conversation history and provide relevant answers.
+            If referring to content from the PDF, be specific about which page you're referencing."""
+        }
+
+        # Convert our messages to OpenAI format and add the current question
+        chat_messages = [system_message] + [
+            {"role": msg["role"], "content": msg["content"]} 
+            for msg in messages
+        ]
+        
+        # Add the current question if it's not already in the messages
+        if question and (not messages or messages[-1]["content"] != question):
+            chat_messages.append({"role": "user", "content": question})
+
+        # Get response from OpenAI using the new client format
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=chat_messages,
+            temperature=0.7,
+            max_tokens=500
+        )
+
+        return jsonify({
+            "answer": response.choices[0].message.content
+        })
+
+    except RateLimitError as e:
+        print(f"OpenAI Rate Limit Error: {str(e)}")
+        return jsonify({"error": "Rate limit exceeded. Please try again in a moment."}), 429
+    except Exception as e:
+        print(f"Chat Error: {str(e)}")
+        return jsonify({"error": "An error occurred while processing your request. Please try again."}), 500 

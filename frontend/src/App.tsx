@@ -15,6 +15,7 @@ interface TableOfContentsItem {
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  type?: 'command' | 'conversation';
 }
 
 // Create a separate component for the app content
@@ -27,6 +28,7 @@ const AppContent = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatIsLoading, setChatIsLoading] = useState(false);
   const pdfViewerRef = useRef<PDFJSViewerRef>(null);
+  const [chatContext, setChatContext] = useState<Message[]>([]);
 
   const handleTocClick = (page: number) => {
     console.log('Raw page number from TOC click:', page);
@@ -124,35 +126,84 @@ const AppContent = () => {
     }
   };
 
+  // Helper to check if message is a command
+  const isCommand = (message: string): boolean => {
+    const commands = [
+      'summarize',
+      'read',
+      'navigate',
+      'zoom',
+      'go to page'
+    ];
+    return commands.some(cmd => message.toLowerCase().startsWith(cmd));
+  };
+
   const handleSendMessage = async (message: string) => {
     if (!message.trim() || chatIsLoading) return;
 
     // Add user message
-    setMessages(prev => [...prev, { role: 'user', content: message }]);
+    const userMessage: Message = { 
+      role: 'user', 
+      content: message,
+      type: isCommand(message) ? 'command' : 'conversation'
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setChatContext(prev => [...prev, userMessage]);
     setChatIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/qa/ask', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ question: message, page: currentPage }),
-      });
+      if (isCommand(message)) {
+        // Use existing function-based approach for commands
+        const response = await fetch('http://localhost:8000/api/qa/ask', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ question: message, page: currentPage }),
+        });
 
-      if (!response.ok) {
-        throw new Error('Failed to get response');
+        if (!response.ok) throw new Error('Failed to get response');
+        const data = await response.json();
+        
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: data.answer,
+          type: 'command'
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+
+      } else {
+        // Use OpenAI API directly for conversational queries
+        const response = await fetch('http://localhost:8000/api/qa/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            messages: chatContext.slice(-10), // Keep last 10 messages for context
+            currentPage,
+            question: message 
+          }),
+        });
+
+        if (!response.ok) throw new Error('Failed to get response');
+        const data = await response.json();
+        
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: data.answer,
+          type: 'conversation'
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+        setChatContext(prev => [...prev, assistantMessage]);
       }
-
-      const data = await response.json();
-      
-      // Add assistant message
-      setMessages(prev => [...prev, { role: 'assistant', content: data.answer }]);
     } catch (error) {
-      setMessages(prev => [...prev, {
+      const errorMessage: Message = {
         role: 'assistant',
-        content: 'Sorry, I encountered an error processing your request.'
-      }]);
+        content: 'Sorry, I encountered an error processing your request.',
+        type: 'command'
+      };
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setChatIsLoading(false);
     }
