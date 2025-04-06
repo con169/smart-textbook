@@ -76,6 +76,7 @@
   opacity: 0.2;
   line-height: 1.0;
   user-select: text;
+  pointer-events: auto;
 }
 
 .pdfjs-text-layer > span {
@@ -83,7 +84,13 @@
   position: absolute;
   white-space: pre;
   cursor: text;
-  transform-origin: 0% 0%;
+  pointer-events: auto;
+  -webkit-touch-callout: text;
+  -webkit-user-select: text;
+  -khtml-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
 }
 
 .pdfjs-text-layer > span::selection {

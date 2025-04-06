@@ -221,6 +221,10 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
       canvas.style.height = 'auto';
       textLayerDiv.className = 'pdfjs-text-layer';
 
+      // Set dimensions and position for text layer
+      textLayerDiv.style.width = `${viewport.width}px`;
+      textLayerDiv.style.height = `${viewport.height}px`;
+
       container.appendChild(canvas);
       container.appendChild(textLayerDiv);
 
@@ -250,7 +254,7 @@ const PDFJSViewer = forwardRef<PDFJSViewerRef, PDFJSViewerProps>(({ file, curren
         textDivs: HTMLElement[];
       }) => Promise<void>;
 
-      // Render text layer
+      // Render text layer with the same viewport as the page
       await renderTextLayer({
         textContent,
         container: textLayerDiv,
